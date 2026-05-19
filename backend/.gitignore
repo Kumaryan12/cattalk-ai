@@ -1,9 +1,0 @@
-# Python virtual env
-backend/.venv/
-
-# Flutter
-build/
-.dart_tool/
-
-# macOS
-.DS_Store
