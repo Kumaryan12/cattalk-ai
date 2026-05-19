@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'image_scan_screen.dart';
 import 'cue_review_screen.dart';
 import 'logs_screen.dart';
 class HomeScreen extends StatelessWidget {
@@ -35,7 +35,7 @@ class HomeScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const CueReviewScreen(),
+                    builder: (_) => const ImageScanScreen(),
                   ),
                 );
               },
