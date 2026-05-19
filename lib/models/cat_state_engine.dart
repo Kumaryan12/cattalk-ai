@@ -7,6 +7,7 @@ class CatStateEngine {
       CatState.relaxed: 0,
       CatState.exploratorySocial: 0,
       CatState.playfulActive: 0,
+      CatState.alertCautious: 0,
       CatState.defensiveStressed: 0,
       CatState.attentionSeeking: 0,
       CatState.unknown: 0,

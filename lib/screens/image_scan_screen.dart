@@ -1,9 +1,18 @@
+import 'dart:convert';
+import 'dart:html' as html;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'cue_review_screen.dart';
+import '../models/backend_prediction.dart';
+import '../models/cat_cues.dart';
+import '../models/cat_detection_result.dart';
+import '../services/backend_api_service.dart';
+import '../services/web_cat_detection_service.dart';
+import 'prediction_result_screen.dart';
+import '../services/mood_fusion_engine.dart';
 
 class ImageScanScreen extends StatefulWidget {
   const ImageScanScreen({super.key});
@@ -13,8 +22,134 @@ class ImageScanScreen extends StatefulWidget {
 }
 
 class _ImageScanScreenState extends State<ImageScanScreen> {
+  static const String imageElementId = 'cat-scan-image';
+
   Uint8List? selectedImageBytes;
+  double? originalImageWidth;
+  double? originalImageHeight;
+
+  CatDetectionResult? detectionResult;
+  BackendPrediction? backendPrediction;
+
+  bool isDetecting = false;
+  bool isBackendPredicting = false;
+
   final ImagePicker picker = ImagePicker();
+
+  void updateHiddenHtmlImage(Uint8List imageBytes) {
+    final base64Image = base64Encode(imageBytes);
+    final dataUrl = 'data:image/jpeg;base64,$base64Image';
+
+    final existingElement = html.document.getElementById(imageElementId);
+
+    if (existingElement is html.ImageElement) {
+      existingElement.src = dataUrl;
+      return;
+    }
+
+    final imageElement = html.ImageElement()
+      ..id = imageElementId
+      ..src = dataUrl
+      ..style.display = 'none';
+
+    html.document.body?.append(imageElement);
+  }
+
+  Future<void> updateOriginalImageDimensions(Uint8List imageBytes) async {
+    final codec = await ui.instantiateImageCodec(imageBytes);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+
+    originalImageWidth = image.width.toDouble();
+    originalImageHeight = image.height.toDouble();
+  }
+
+  Future<void> runCatDetection() async {
+    if (selectedImageBytes == null) return;
+
+    setState(() {
+      isDetecting = true;
+      detectionResult = null;
+    });
+
+    try {
+      updateHiddenHtmlImage(selectedImageBytes!);
+
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      final result = await WebCatDetectionService().detectCatFromElementId(
+        imageElementId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        detectionResult = result;
+        isDetecting = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isDetecting = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cat detection failed: $e'),
+        ),
+      );
+    }
+  }
+
+  Future<void> runBackendMoodPrediction() async {
+    if (selectedImageBytes == null) return;
+
+    setState(() {
+      isBackendPredicting = true;
+      backendPrediction = null;
+    });
+
+    try {
+      final prediction = await BackendApiService().predictCatState(
+        selectedImageBytes!,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        backendPrediction = prediction;
+        isBackendPredicting = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isBackendPredicting = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Backend prediction failed: $e'),
+        ),
+      );
+    }
+  }
+
+  Future<void> handleSelectedImage(XFile image) async {
+    final bytes = await image.readAsBytes();
+
+    await updateOriginalImageDimensions(bytes);
+
+    setState(() {
+      selectedImageBytes = bytes;
+      detectionResult = null;
+      backendPrediction = null;
+    });
+
+    await runCatDetection();
+    await runBackendMoodPrediction();
+  }
 
   Future<void> pickFromGallery() async {
     final XFile? image = await picker.pickImage(
@@ -24,11 +159,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
 
     if (image == null) return;
 
-    final bytes = await image.readAsBytes();
-
-    setState(() {
-      selectedImageBytes = bytes;
-    });
+    await handleSelectedImage(image);
   }
 
   Future<void> takePhoto() async {
@@ -39,24 +170,142 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
 
     if (image == null) return;
 
-    final bytes = await image.readAsBytes();
-
-    setState(() {
-      selectedImageBytes = bytes;
-    });
+    await handleSelectedImage(image);
   }
 
-  void continueToCueReview() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const CueReviewScreen(),
+  void continueToPredictionResult() {
+  final result = detectionResult;
+
+  if (result == null || selectedImageBytes == null) {
+    return;
+  }
+
+  final cues = CatCues(
+    movement: result.suggestedMovement,
+    ears: result.suggestedEars,
+    tail: result.suggestedTail,
+    body: result.suggestedBody,
+    vocal: result.suggestedVocal,
+  );
+
+  final prediction =
+      MoodFusionEngine().predict(
+    cues: cues,
+    backendPrediction: backendPrediction,
+  );
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => PredictionResultScreen(
+
+  imageBytes: selectedImageBytes!,
+
+  result: prediction,
+
+  backendPrediction: backendPrediction,
+
+)
+    ),
+  );
+}
+
+  String confidenceText(double confidence) {
+    return '${(confidence * 100).toStringAsFixed(1)}%';
+  }
+
+  Widget buildImageWithBoundingBox() {
+    final bbox = detectionResult?.bbox;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const displayedHeight = 260.0;
+        final displayedWidth = constraints.maxWidth;
+
+        return Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.memory(
+                selectedImageBytes!,
+                height: displayedHeight,
+                width: displayedWidth,
+                fit: BoxFit.cover,
+              ),
+            ),
+            if (bbox != null && bbox.length == 4)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: BoundingBoxPainter(
+                    bbox: bbox,
+                    displayedWidth: displayedWidth,
+                    displayedHeight: displayedHeight,
+                    originalImageWidth: originalImageWidth,
+                    originalImageHeight: originalImageHeight,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget buildBackendScores() {
+    final prediction = backendPrediction;
+
+    if (prediction == null) return const SizedBox.shrink();
+
+    final entries = prediction.scores.entries.toList()
+      ..sort(
+        (a, b) => (b.value as num).compareTo(a.value as num),
+      );
+
+    return Card(
+      color: Colors.blue.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Hugging Face Mood Estimate',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text('Top label: ${prediction.predictedLabel}'),
+            Text('Confidence: ${confidenceText(prediction.confidence)}'),
+            const SizedBox(height: 8),
+            Text(
+              prediction.warning,
+              style: const TextStyle(fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'All scores:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            ...entries.map(
+              (entry) {
+                final value = (entry.value as num).toDouble();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text('${entry.key}: ${confidenceText(value)}'),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final canContinue =
+        selectedImageBytes != null && detectionResult?.catDetected == true;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scan Cat Image'),
@@ -70,19 +319,11 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'For now, this stores the scan step in the flow. Next we will connect pretrained image detection.',
+            'The app uses TensorFlow.js COCO-SSD for cat detection and a FastAPI + Hugging Face backend for weak mood estimation.',
           ),
           const SizedBox(height: 24),
-
           if (selectedImageBytes != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.memory(
-                selectedImageBytes!,
-                height: 260,
-                fit: BoxFit.cover,
-              ),
-            )
+            buildImageWithBoundingBox()
           else
             Container(
               height: 260,
@@ -93,32 +334,182 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
               ),
               child: const Text('No image selected'),
             ),
-
+          const SizedBox(height: 20),
+          if (isDetecting)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 16),
+                    Text('Running cat detection model...'),
+                  ],
+                ),
+              ),
+            ),
+          if (isBackendPredicting)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 16),
+                    Text('Running Hugging Face mood prediction...'),
+                  ],
+                ),
+              ),
+            ),
+          if (detectionResult != null)
+            Card(
+              color: detectionResult!.catDetected
+                  ? Colors.green.shade50
+                  : Colors.red.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  '${detectionResult!.message}\n'
+                  'Cat detected: ${detectionResult!.catDetected ? "Yes" : "No"}\n'
+                  'Confidence: ${confidenceText(detectionResult!.confidence)}\n'
+                  'Bounding box: ${detectionResult!.bbox ?? "Not available"}\n\n'
+                  'Suggested cues:\n'
+                  'Movement: ${detectionResult!.suggestedMovement.name}\n'
+                  'Ears: ${detectionResult!.suggestedEars.name}\n'
+                  'Tail: ${detectionResult!.suggestedTail.name}\n'
+                  'Body: ${detectionResult!.suggestedBody.name}\n'
+                  'Vocal: ${detectionResult!.suggestedVocal.name}',
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
+            ),
+          if (backendPrediction != null) buildBackendScores(),
           const SizedBox(height: 24),
-
           FilledButton.icon(
             onPressed: takePhoto,
             icon: const Icon(Icons.camera_alt),
             label: const Text('Take Photo'),
           ),
-
           const SizedBox(height: 12),
-
           OutlinedButton.icon(
             onPressed: pickFromGallery,
             icon: const Icon(Icons.photo_library),
             label: const Text('Choose from Gallery'),
           ),
-
-          const SizedBox(height: 24),
-
-          FilledButton(
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
             onPressed:
-                selectedImageBytes == null ? null : continueToCueReview,
-            child: const Text('Continue to Cue Review'),
+                selectedImageBytes == null ? null : runBackendMoodPrediction,
+            icon: const Icon(Icons.psychology),
+            label: const Text('Run Hugging Face Prediction Again'),
           ),
+          const SizedBox(height: 24),
+          FilledButton(
+  onPressed:
+      canContinue
+          ? continueToPredictionResult
+          : null,
+  child: const Text(
+    'Generate AI Prediction',
+  ),
+),
         ],
       ),
     );
+  }
+}
+
+class BoundingBoxPainter extends CustomPainter {
+  final List<double> bbox;
+  final double displayedWidth;
+  final double displayedHeight;
+  final double? originalImageWidth;
+  final double? originalImageHeight;
+
+  BoundingBoxPainter({
+    required this.bbox,
+    required this.displayedWidth,
+    required this.displayedHeight,
+    required this.originalImageWidth,
+    required this.originalImageHeight,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..color = Colors.green;
+
+    final labelPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.green;
+
+    final originalWidth = originalImageWidth;
+    final originalHeight = originalImageHeight;
+
+    if (originalWidth == null || originalHeight == null) return;
+    if (originalWidth <= 0 || originalHeight <= 0) return;
+
+    final sourceX = bbox[0];
+    final sourceY = bbox[1];
+    final sourceW = bbox[2];
+    final sourceH = bbox[3];
+
+    final scaleX = displayedWidth / originalWidth;
+    final scaleY = displayedHeight / originalHeight;
+
+    final coverScale = scaleX > scaleY ? scaleX : scaleY;
+    final scaledImageWidth = originalWidth * coverScale;
+    final scaledImageHeight = originalHeight * coverScale;
+    final cropOffsetX = (displayedWidth - scaledImageWidth) / 2;
+    final cropOffsetY = (displayedHeight - scaledImageHeight) / 2;
+
+    final rect = Rect.fromLTWH(
+      sourceX * coverScale + cropOffsetX,
+      sourceY * coverScale + cropOffsetY,
+      sourceW * coverScale,
+      sourceH * coverScale,
+    );
+
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(0, 0, displayedWidth, displayedHeight));
+    canvas.drawRect(rect, paint);
+
+    final labelTop = rect.top - 28 < 0 ? rect.top : rect.top - 28;
+
+    canvas.drawRect(
+      Rect.fromLTWH(rect.left, labelTop, 120, 28),
+      labelPaint,
+    );
+
+    final textPainter = TextPainter(
+      text: const TextSpan(
+        text: 'CAT',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(rect.left + 8, labelTop + 4),
+    );
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant BoundingBoxPainter oldDelegate) {
+    return oldDelegate.bbox != bbox ||
+        oldDelegate.originalImageWidth != originalImageWidth ||
+        oldDelegate.originalImageHeight != originalImageHeight ||
+        oldDelegate.displayedWidth != displayedWidth ||
+        oldDelegate.displayedHeight != displayedHeight;
   }
 }

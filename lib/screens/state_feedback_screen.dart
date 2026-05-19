@@ -21,21 +21,23 @@ class _StateFeedbackScreenState extends State<StateFeedbackScreen> {
   bool? wasCorrect;
 
   String stateName(CatState state) {
-    switch (state) {
-      case CatState.relaxed:
-        return 'Relaxed';
-      case CatState.exploratorySocial:
-        return 'Exploratory / Social';
-      case CatState.playfulActive:
-        return 'Playful / Active';
-      case CatState.defensiveStressed:
-        return 'Defensive / Stressed';
-      case CatState.attentionSeeking:
-        return 'Attention Seeking';
-      case CatState.unknown:
-        return 'Unknown';
-    }
+  switch (state) {
+    case CatState.relaxed:
+      return 'Relaxed';
+    case CatState.exploratorySocial:
+      return 'Exploratory / Social';
+    case CatState.alertCautious:
+      return 'Alert / Cautious';
+    case CatState.playfulActive:
+      return 'Playful / Active';
+    case CatState.defensiveStressed:
+      return 'Defensive / Stressed';
+    case CatState.attentionSeeking:
+      return 'Attention Seeking';
+    case CatState.unknown:
+      return 'Unknown';
   }
+}
 
   void submitFeedback() {
   final finalState = wasCorrect == true

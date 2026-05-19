@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="CatTalk AI - Personalized cat interaction MVP.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -29,8 +29,61 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>cattalk_ai</title>
+  <title>CatTalk AI</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- TensorFlow.js + COCO-SSD object detection model -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@latest"></script>
+
+  <script>
+    let catDetectorModel = null;
+
+    async function loadCatDetectorModel() {
+      if (!catDetectorModel) {
+        catDetectorModel = await cocoSsd.load();
+        console.log("COCO-SSD model loaded");
+      }
+      return true;
+    }
+
+    async function detectCatFromImageElement(imageElementId) {
+      await loadCatDetectorModel();
+
+      const img = document.getElementById(imageElementId);
+
+      if (!img) {
+        return {
+          catDetected: false,
+          confidence: 0,
+          message: "Image element not found",
+          bbox: null
+        };
+      }
+
+      const predictions = await catDetectorModel.detect(img);
+
+      const catPrediction = predictions.find(
+        (prediction) => prediction.class === "cat"
+      );
+
+      if (!catPrediction) {
+        return {
+          catDetected: false,
+          confidence: 0,
+          message: "No cat detected",
+          bbox: null
+        };
+      }
+
+      return {
+        catDetected: true,
+        confidence: catPrediction.score,
+        message: "Cat detected using COCO-SSD",
+        bbox: catPrediction.bbox
+      };
+    }
+  </script>
 </head>
 <body>
   <!--

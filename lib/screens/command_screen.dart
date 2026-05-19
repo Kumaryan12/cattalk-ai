@@ -22,6 +22,8 @@ class CommandScreen extends StatelessWidget {
         return 'Relaxed';
       case CatState.exploratorySocial:
         return 'Exploratory / Social';
+        case CatState.alertCautious:
+        return 'Alert / Cautious';
       case CatState.playfulActive:
         return 'Playful / Active';
       case CatState.defensiveStressed:

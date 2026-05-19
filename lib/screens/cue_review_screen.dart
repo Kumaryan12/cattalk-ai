@@ -6,7 +6,12 @@ import '../services/cat_state_engine.dart';
 import 'state_feedback_screen.dart';
 
 class CueReviewScreen extends StatefulWidget {
-  const CueReviewScreen({super.key});
+  final CatCues? initialCues;
+
+  const CueReviewScreen({
+    super.key,
+    this.initialCues,
+  });
 
   @override
   State<CueReviewScreen> createState() => _CueReviewScreenState();
@@ -20,6 +25,21 @@ class _CueReviewScreenState extends State<CueReviewScreen> {
   VocalCue vocal = VocalCue.unknown;
 
   CatStateResult? result;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final initial = widget.initialCues;
+
+    if (initial != null) {
+      movement = initial.movement;
+      ears = initial.ears;
+      tail = initial.tail;
+      body = initial.body;
+      vocal = initial.vocal;
+    }
+  }
 
   void predictState() {
     final cues = CatCues(
@@ -43,6 +63,8 @@ class _CueReviewScreenState extends State<CueReviewScreen> {
         return 'Relaxed';
       case CatState.exploratorySocial:
         return 'Exploratory / Social';
+        case CatState.alertCautious:
+        return 'Alert / Cautious';
       case CatState.playfulActive:
         return 'Playful / Active';
       case CatState.defensiveStressed:

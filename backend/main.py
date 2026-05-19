@@ -1,0 +1,56 @@
+from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image
+from transformers import pipeline
+import io
+
+app = FastAPI(title="CatTalk AI Backend")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+classifier = pipeline(
+    task="zero-shot-image-classification",
+    model="openai/clip-vit-base-patch32",
+)
+
+LABELS = [
+    "a relaxed calm cat",
+    "a curious exploratory cat",
+    "a playful active cat",
+    "a stressed anxious cat",
+    "a defensive aggressive cat",
+    "an attention seeking cat",
+]
+
+
+@app.get("/")
+def root():
+    return {"message": "CatTalk AI backend is running"}
+
+
+@app.post("/predict-cat-state")
+async def predict_cat_state(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    results = classifier(image, candidate_labels=LABELS)
+
+    scores = {
+        item["label"]: float(item["score"])
+        for item in results
+    }
+
+    best = results[0]
+
+    return {
+        "predicted_label": best["label"],
+        "confidence": float(best["score"]),
+        "scores": scores,
+        "warning": "This is a weak zero-shot behavioral estimate, not a confirmed cat emotion.",
+    }

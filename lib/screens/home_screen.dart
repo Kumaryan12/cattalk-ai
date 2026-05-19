@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+
 import 'image_scan_screen.dart';
-import 'cue_review_screen.dart';
 import 'logs_screen.dart';
+import 'realtime_scan_screen.dart';
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -30,6 +32,7 @@ class HomeScreen extends StatelessWidget {
               style: TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 40),
+
             FilledButton.icon(
               onPressed: () {
                 Navigator.push(
@@ -39,22 +42,39 @@ class HomeScreen extends StatelessWidget {
                   ),
                 );
               },
-              icon: const Icon(Icons.pets),
-              label: const Text('Start Cat Scan'),
+              icon: const Icon(Icons.image),
+              label: const Text('Start Image Scan'),
             ),
+
             const SizedBox(height: 16),
+
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const RealtimeScanScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.videocam),
+              label: const Text('Start Real-time AI Scan'),
+            ),
+
+            const SizedBox(height: 16),
+
             OutlinedButton.icon(
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const LogsScreen(),
-      ),
-    );
-  },
-  icon: const Icon(Icons.history),
-  label: const Text('View Feedback History'),
-),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LogsScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.history),
+              label: const Text('View Feedback History'),
+            ),
           ],
         ),
       ),
