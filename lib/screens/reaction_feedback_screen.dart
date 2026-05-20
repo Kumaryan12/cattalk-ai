@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-
+import '../services/backend_storage_service.dart';
 import '../models/cat_state.dart';
 import '../models/interaction_feedback.dart';
 import '../models/interaction_log.dart';
@@ -11,6 +11,7 @@ class ReactionFeedbackScreen extends StatefulWidget {
   final CatState finalState;
   final double stateConfidence;
   final InteractionCommand command;
+  final String goal;
   final String soundUsed;
 
   const ReactionFeedbackScreen({
@@ -19,6 +20,7 @@ class ReactionFeedbackScreen extends StatefulWidget {
     required this.finalState,
     required this.stateConfidence,
     required this.command,
+    required this.goal,
     required this.soundUsed,
   });
 
@@ -62,18 +64,21 @@ class _ReactionFeedbackScreenState extends State<ReactionFeedbackScreen> {
     if (selectedReaction == null || selectedOutcome == null) return;
 
     final log = InteractionLog(
-      id: const Uuid().v4(),
-      timestamp: DateTime.now(),
-      predictedState: widget.predictedState,
-      finalState: widget.finalState,
-      stateConfidence: widget.stateConfidence,
-      command: widget.command,
-      soundUsed: widget.soundUsed,
-      reaction: selectedReaction!,
-      outcome: selectedOutcome!,
-    );
+  id: const Uuid().v4(),
+  timestamp: DateTime.now(),
+  predictedState: widget.predictedState,
+  finalState: widget.finalState,
+  stateConfidence: widget.stateConfidence,
+  command: widget.command,
+  goal: widget.goal,
+  soundUsed: widget.soundUsed,
+  reaction: selectedReaction!,
+  outcome: selectedOutcome!,
+);
 
     await LocalStorageService().saveInteractionLog(log);
+
+    await BackendStorageService().uploadInteractionFeedback(log);
 
     if (!mounted) return;
 

@@ -4,6 +4,12 @@ from PIL import Image
 from transformers import pipeline
 import io
 
+from database import Base, engine
+from routes.training import router as training_router
+from routes.feedback import router as feedback_router
+
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI(title="CatTalk AI Backend")
 
 app.add_middleware(
@@ -27,6 +33,9 @@ LABELS = [
     "a defensive aggressive cat",
     "an attention seeking cat",
 ]
+
+app.include_router(training_router)
+app.include_router(feedback_router)
 
 
 @app.get("/")

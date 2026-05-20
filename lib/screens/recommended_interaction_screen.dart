@@ -229,6 +229,7 @@ class RecommendedInteractionScreen extends StatelessWidget {
                     finalState: result.state,
                     stateConfidence: result.confidence,
                     command: command,
+                    goal: goalName(goal),
                     soundUsed: sound.id,
                   ),
                 ),

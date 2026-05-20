@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
-
+import '../services/backend_storage_service.dart';
 import 'package:flutter/material.dart';
 
 import '../models/backend_prediction.dart';
@@ -76,6 +76,10 @@ class _PredictionResultScreenState extends State<PredictionResultScreen> {
     );
 
     await TrainingMemoryService().saveSample(sample);
+
+await BackendStorageService().uploadTrainingSample(
+  sample,
+);
 
     if (!mounted) return;
 

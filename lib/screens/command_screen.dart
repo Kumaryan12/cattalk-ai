@@ -115,6 +115,7 @@ ScaffoldMessenger.of(context).showSnackBar(
                           stateConfidence: stateConfidence,
                           command: command,
                           soundUsed: sound,
+                          goal: 'Manual command',
                         ),
                       ),
                     );

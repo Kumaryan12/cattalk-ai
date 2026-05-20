@@ -10,6 +10,7 @@ class InteractionLog {
   final double stateConfidence;
 
   final InteractionCommand command;
+  final String goal;
   final String soundUsed;
 
   final CatReaction reaction;
@@ -22,6 +23,7 @@ class InteractionLog {
     required this.finalState,
     required this.stateConfidence,
     required this.command,
+    required this.goal,
     required this.soundUsed,
     required this.reaction,
     required this.outcome,
@@ -35,6 +37,7 @@ class InteractionLog {
       'finalState': finalState.name,
       'stateConfidence': stateConfidence,
       'command': command.name,
+      'goal': goal,
       'soundUsed': soundUsed,
       'reaction': reaction.name,
       'outcome': outcome.name,
