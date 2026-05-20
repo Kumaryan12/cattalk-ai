@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-
+import 'dart:typed_data';
 import '../models/interaction_log.dart';
 import '../models/training_sample.dart';
 
@@ -41,6 +41,31 @@ class BackendStorageService {
       );
     }
   }
+
+  Future<String> uploadImage(Uint8List imageBytes) async {
+  final request = http.MultipartRequest(
+    'POST',
+    Uri.parse('$baseUrl/upload-image'),
+  );
+
+  request.files.add(
+    http.MultipartFile.fromBytes(
+      'file',
+      imageBytes,
+      filename: 'cat.jpg',
+    ),
+  );
+
+  final streamedResponse = await request.send();
+  final response = await http.Response.fromStream(streamedResponse);
+
+  if (response.statusCode != 200) {
+    throw Exception('Failed to upload image');
+  }
+
+  final jsonData = jsonDecode(response.body);
+  return jsonData['image_path'];
+}
 
   Future<void> uploadInteractionFeedback(
     InteractionLog log,

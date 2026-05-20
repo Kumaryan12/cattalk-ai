@@ -3,11 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 from transformers import pipeline
 import io
-
+from routes.export import router as export_router
 from database import Base, engine
 from routes.training import router as training_router
 from routes.feedback import router as feedback_router
-
+from routes.upload import router as upload_router
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="CatTalk AI Backend")
@@ -36,8 +36,8 @@ LABELS = [
 
 app.include_router(training_router)
 app.include_router(feedback_router)
-
-
+app.include_router(export_router)
+app.include_router(upload_router)
 @app.get("/")
 def root():
     return {"message": "CatTalk AI backend is running"}

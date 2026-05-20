@@ -56,14 +56,27 @@ class _PredictionResultScreenState extends State<PredictionResultScreen> {
   Future<void> saveFeedback({
     required bool correct,
   }) async {
+    final hf = widget.backendPrediction;
+
+    String? imagePath;
+    try {
+      imagePath = await BackendStorageService().uploadImage(widget.imageBytes);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Image upload failed, saving feedback locally only: $e'),
+        ),
+      );
+    }
+
     final finalState = correct ? widget.result.state : correctedState;
 
     if (finalState == null) return;
 
-    final hf = widget.backendPrediction;
-
     final sample = TrainingSample(
       imageBase64: base64Encode(widget.imageBytes),
+      imagePath: imagePath,
       hfPredictedLabel: hf?.predictedLabel,
       hfConfidence: hf?.confidence,
       hfScores: hf?.scores,
@@ -77,9 +90,9 @@ class _PredictionResultScreenState extends State<PredictionResultScreen> {
 
     await TrainingMemoryService().saveSample(sample);
 
-await BackendStorageService().uploadTrainingSample(
-  sample,
-);
+    if (imagePath != null) {
+      await BackendStorageService().uploadTrainingSample(sample);
+    }
 
     if (!mounted) return;
 

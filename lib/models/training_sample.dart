@@ -1,5 +1,6 @@
 class TrainingSample {
   final String imageBase64;
+  final String? imagePath;
 
   final String? hfPredictedLabel;
   final double? hfConfidence;
@@ -15,6 +16,7 @@ class TrainingSample {
 
   TrainingSample({
     required this.imageBase64,
+    required this.imagePath,
     required this.hfPredictedLabel,
     required this.hfConfidence,
     required this.hfScores,
@@ -29,6 +31,7 @@ class TrainingSample {
   Map<String, dynamic> toJson() {
     return {
       'imageBase64': imageBase64,
+      'imagePath': imagePath,
       'hfPredictedLabel': hfPredictedLabel,
       'hfConfidence': hfConfidence,
       'hfScores': hfScores,
@@ -44,6 +47,7 @@ class TrainingSample {
   factory TrainingSample.fromJson(Map<String, dynamic> json) {
     return TrainingSample(
       imageBase64: json['imageBase64'],
+      imagePath: json['imagePath'],
       hfPredictedLabel: json['hfPredictedLabel'],
       hfConfidence: json['hfConfidence'] == null
           ? null
