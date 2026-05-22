@@ -256,7 +256,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
                 selectedImageBytes!,
                 height: displayedHeight,
                 width: displayedWidth,
-                fit: BoxFit.cover,
+                fit: BoxFit.contain,
               ),
             ),
             if (bbox != null && bbox.length == 4)

@@ -216,6 +216,15 @@ class RecommendedInteractionScreen extends StatelessWidget {
             icon: const Icon(Icons.volume_up),
             label: const Text('Play Recommended Sound'),
           ),
+          const SizedBox(height: 12),
+
+          OutlinedButton.icon(
+            onPressed: () async {
+              await AudioService().stopSound();
+            },
+            icon: const Icon(Icons.stop),
+            label: const Text('Stop Sound'),
+          ),
 
           const SizedBox(height: 12),
 

@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import '../services/backend_storage_service.dart';
+
 import 'package:flutter/material.dart';
 
 import '../models/backend_prediction.dart';
 import '../models/cat_state.dart';
 import '../models/training_sample.dart';
+import '../services/backend_storage_service.dart';
 import '../services/training_memory_service.dart';
 import 'interaction_goal_screen.dart';
 
@@ -27,6 +28,8 @@ class PredictionResultScreen extends StatefulWidget {
 
 class _PredictionResultScreenState extends State<PredictionResultScreen> {
   CatState? correctedState;
+  bool showCorrectionPicker = false;
+  bool isSaving = false;
 
   String stateName(CatState state) {
     switch (state) {
@@ -47,6 +50,50 @@ class _PredictionResultScreenState extends State<PredictionResultScreen> {
     }
   }
 
+  String confidenceLabel(double confidence) {
+    if (confidence >= 0.70) return 'High';
+    if (confidence >= 0.45) return 'Medium';
+    return 'Low';
+  }
+
+  Color moodColor(CatState state) {
+    switch (state) {
+      case CatState.relaxed:
+        return Colors.green;
+      case CatState.exploratorySocial:
+        return Colors.teal;
+      case CatState.alertCautious:
+        return Colors.orange;
+      case CatState.playfulActive:
+        return Colors.blue;
+      case CatState.defensiveStressed:
+        return Colors.red;
+      case CatState.attentionSeeking:
+        return Colors.purple;
+      case CatState.unknown:
+        return Colors.grey;
+    }
+  }
+
+  String friendlySummary(CatState state) {
+    switch (state) {
+      case CatState.relaxed:
+        return 'Your cat appears calm and comfortable.';
+      case CatState.exploratorySocial:
+        return 'Your cat appears curious and socially open.';
+      case CatState.alertCautious:
+        return 'Your cat appears alert and cautious.';
+      case CatState.playfulActive:
+        return 'Your cat appears active and playful.';
+      case CatState.defensiveStressed:
+        return 'Your cat may be stressed or defensive. Approach gently.';
+      case CatState.attentionSeeking:
+        return 'Your cat may be trying to get attention.';
+      case CatState.unknown:
+        return 'The system is not confident enough to classify this state.';
+    }
+  }
+
   Map<String, dynamic> fusionScoresToJson() {
     return widget.result.scores.map(
       (state, score) => MapEntry(stateName(state), score),
@@ -56,23 +103,23 @@ class _PredictionResultScreenState extends State<PredictionResultScreen> {
   Future<void> saveFeedback({
     required bool correct,
   }) async {
+    if (isSaving) return;
+
+    final finalState = correct ? widget.result.state : correctedState;
+    if (finalState == null) return;
+
+    setState(() {
+      isSaving = true;
+    });
+
     final hf = widget.backendPrediction;
 
     String? imagePath;
     try {
       imagePath = await BackendStorageService().uploadImage(widget.imageBytes);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Image upload failed, saving feedback locally only: $e'),
-        ),
-      );
+    } catch (_) {
+      imagePath = null;
     }
-
-    final finalState = correct ? widget.result.state : correctedState;
-
-    if (finalState == null) return;
 
     final sample = TrainingSample(
       imageBase64: base64Encode(widget.imageBytes),
@@ -96,14 +143,10 @@ class _PredictionResultScreenState extends State<PredictionResultScreen> {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Mood feedback saved successfully.'),
-      ),
-    );
-  }
+    setState(() {
+      isSaving = false;
+    });
 
-  void goToInteractionGoal() {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -117,7 +160,8 @@ class _PredictionResultScreenState extends State<PredictionResultScreen> {
   @override
   Widget build(BuildContext context) {
     final result = widget.result;
-    final hf = widget.backendPrediction;
+    final color = moodColor(result.state);
+    final reasons = result.reasons.take(3).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -127,82 +171,105 @@ class _PredictionResultScreenState extends State<PredictionResultScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             child: Image.memory(
               widget.imageBytes,
               height: 280,
-              fit: BoxFit.cover,
+              width: double.infinity,
+              fit: BoxFit.contain,
             ),
           ),
 
           const SizedBox(height: 24),
 
           Card(
-            color: Colors.blue.shade50,
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Fusion Prediction',
+                    'AI Mood Estimate',
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
 
                   Text(
                     stateName(result.state),
-                    style: const TextStyle(
-                      fontSize: 28,
+                    style: TextStyle(
+                      fontSize: 30,
                       fontWeight: FontWeight.bold,
+                      color: color,
                     ),
                   ),
 
                   const SizedBox(height: 8),
 
                   Text(
-                    'Confidence: ${(result.confidence * 100).toStringAsFixed(1)}%',
+                    friendlySummary(result.state),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.4,
+                    ),
                   ),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
 
-                  const Text(
-                    'Reasoning',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  Text(
+                    'Confidence: ${confidenceLabel(result.confidence)} '
+                    '(${(result.confidence * 100).toStringAsFixed(1)}%)',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
 
                   const SizedBox(height: 8),
 
-                  ...result.reasons.map(
-                    (reason) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Text('• $reason'),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: LinearProgressIndicator(
+                      value: result.confidence.clamp(0.0, 1.0),
+                      minHeight: 10,
+                      backgroundColor: Colors.grey.shade200,
+                      color: color,
                     ),
                   ),
+
+                  const SizedBox(height: 20),
+
+                  const Text(
+                    'Why this result?',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  if (reasons.isEmpty)
+                    const Text('No detailed reasoning available.')
+                  else
+                    ...reasons.map(
+                      (reason) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          '• $reason',
+                          style: const TextStyle(height: 1.35),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
-
-          if (hf != null) ...[
-            const SizedBox(height: 16),
-            Card(
-              color: Colors.purple.shade50,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'Hugging Face Raw Estimate\n'
-                  'Label: ${hf.predictedLabel}\n'
-                  'Confidence: ${(hf.confidence * 100).toStringAsFixed(1)}%\n\n'
-                  '${hf.warning}',
-                ),
-              ),
-            ),
-          ],
 
           const SizedBox(height: 24),
 
@@ -214,59 +281,71 @@ class _PredictionResultScreenState extends State<PredictionResultScreen> {
             ),
           ),
 
-          const SizedBox(height: 16),
-
-          FilledButton.icon(
-            onPressed: () async {
-              await saveFeedback(correct: true);
-
-              if (!context.mounted) return;
-
-              goToInteractionGoal();
-            },
-            icon: const Icon(Icons.check),
-            label: const Text('Yes, Correct'),
-          ),
-
-          const SizedBox(height: 12),
-
-          DropdownButtonFormField<CatState>(
-            value: correctedState,
-            decoration: const InputDecoration(
-              labelText: 'Select actual mood if incorrect',
-              border: OutlineInputBorder(),
-            ),
-            items: CatState.values
-                .where((e) => e != CatState.unknown)
-                .map(
-                  (state) => DropdownMenuItem(
-                    value: state,
-                    child: Text(stateName(state)),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              setState(() {
-                correctedState = value;
-              });
-            },
-          ),
-
           const SizedBox(height: 12),
 
           FilledButton.icon(
-            onPressed: correctedState == null
+            onPressed: isSaving
                 ? null
                 : () async {
-                    await saveFeedback(correct: false);
-
-                    if (!context.mounted) return;
-
-                    goToInteractionGoal();
+                    await saveFeedback(correct: true);
                   },
-            icon: const Icon(Icons.save),
-            label: const Text('Save Corrected Mood'),
+            icon: const Icon(Icons.check),
+            label: Text(isSaving ? 'Saving...' : 'Yes, it is correct'),
           ),
+
+          const SizedBox(height: 12),
+
+          OutlinedButton.icon(
+            onPressed: isSaving
+                ? null
+                : () {
+                    setState(() {
+                      showCorrectionPicker = true;
+                    });
+                  },
+            icon: const Icon(Icons.edit),
+            label: const Text('No, correct the mood'),
+          ),
+
+          if (showCorrectionPicker) ...[
+            const SizedBox(height: 16),
+
+            DropdownButtonFormField<CatState>(
+              value: correctedState,
+              decoration: const InputDecoration(
+                labelText: 'Actual mood',
+                border: OutlineInputBorder(),
+              ),
+              items: CatState.values
+                  .where((e) => e != CatState.unknown)
+                  .map(
+                    (state) => DropdownMenuItem(
+                      value: state,
+                      child: Text(stateName(state)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: isSaving
+                  ? null
+                  : (value) {
+                      setState(() {
+                        correctedState = value;
+                      });
+                    },
+            ),
+
+            const SizedBox(height: 12),
+
+            FilledButton.icon(
+              onPressed: correctedState == null || isSaving
+                  ? null
+                  : () async {
+                      await saveFeedback(correct: false);
+                    },
+              icon: const Icon(Icons.save),
+              label: Text(isSaving ? 'Saving...' : 'Save and Continue'),
+            ),
+          ],
         ],
       ),
     );
