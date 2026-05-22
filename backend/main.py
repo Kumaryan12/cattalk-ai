@@ -5,6 +5,7 @@ from transformers import pipeline
 import io
 from routes.export import router as export_router
 from database import Base, engine
+from routes.vision_features import router as vision_features_router
 from routes.training import router as training_router
 from routes.feedback import router as feedback_router
 from routes.upload import router as upload_router
@@ -38,6 +39,7 @@ app.include_router(training_router)
 app.include_router(feedback_router)
 app.include_router(export_router)
 app.include_router(upload_router)
+app.include_router(vision_features_router)
 @app.get("/")
 def root():
     return {"message": "CatTalk AI backend is running"}

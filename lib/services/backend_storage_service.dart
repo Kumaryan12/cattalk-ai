@@ -1,12 +1,12 @@
 import 'dart:convert';
-
+import '../config/app_config.dart';
 import 'package:http/http.dart' as http;
 import 'dart:typed_data';
 import '../models/interaction_log.dart';
 import '../models/training_sample.dart';
 
 class BackendStorageService {
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static const String baseUrl = AppConfig.backendBaseUrl;
 
   Future<void> uploadTrainingSample(
     TrainingSample sample,

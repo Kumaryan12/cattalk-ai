@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'dataset_screen.dart';
 import 'image_scan_screen.dart';
 import 'logs_screen.dart';
 import 'realtime_scan_screen.dart';
@@ -75,6 +75,21 @@ class HomeScreen extends StatelessWidget {
               icon: const Icon(Icons.history),
               label: const Text('View Feedback History'),
             ),
+
+            const SizedBox(height: 16),
+
+OutlinedButton.icon(
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const DatasetScreen(),
+      ),
+    );
+  },
+  icon: const Icon(Icons.dataset),
+  label: const Text('View Dataset'),
+),
           ],
         ),
       ),

@@ -52,3 +52,14 @@ build/
 
 # macOS
 .DS_Store
+
+cat >> .gitignore <<'EOF'
+
+# Backend runtime data
+backend/cattalk_ai.db
+backend/uploads/
+backend/yolov8n.pt
+
+# Dataset
+backend/dataset/
+EOF

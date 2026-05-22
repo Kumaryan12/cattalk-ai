@@ -9,10 +9,11 @@ import 'package:image_picker/image_picker.dart';
 import '../models/backend_prediction.dart';
 import '../models/cat_cues.dart';
 import '../models/cat_detection_result.dart';
+import '../models/vision_feature_prediction.dart';
 import '../services/backend_api_service.dart';
+import '../services/mood_fusion_engine.dart';
 import '../services/web_cat_detection_service.dart';
 import 'prediction_result_screen.dart';
-import '../services/mood_fusion_engine.dart';
 
 class ImageScanScreen extends StatefulWidget {
   const ImageScanScreen({super.key});
@@ -30,9 +31,11 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
 
   CatDetectionResult? detectionResult;
   BackendPrediction? backendPrediction;
+  VisionFeaturePrediction? visionPrediction;
 
   bool isDetecting = false;
   bool isBackendPredicting = false;
+  bool isVisionPredicting = false;
 
   final ImagePicker picker = ImagePicker();
 
@@ -95,9 +98,39 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Cat detection failed: $e'),
-        ),
+        SnackBar(content: Text('Cat detection failed: $e')),
+      );
+    }
+  }
+
+  Future<void> runVisionFeaturePrediction() async {
+    if (selectedImageBytes == null) return;
+
+    setState(() {
+      isVisionPredicting = true;
+      visionPrediction = null;
+    });
+
+    try {
+      final prediction = await BackendApiService().predictVisionFeatures(
+        selectedImageBytes!,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        visionPrediction = prediction;
+        isVisionPredicting = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isVisionPredicting = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Vision feature prediction failed: $e')),
       );
     }
   }
@@ -129,9 +162,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Backend prediction failed: $e'),
-        ),
+        SnackBar(content: Text('Fallback CLIP prediction failed: $e')),
       );
     }
   }
@@ -145,9 +176,11 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
       selectedImageBytes = bytes;
       detectionResult = null;
       backendPrediction = null;
+      visionPrediction = null;
     });
 
     await runCatDetection();
+    await runVisionFeaturePrediction();
     await runBackendMoodPrediction();
   }
 
@@ -174,41 +207,34 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
   }
 
   void continueToPredictionResult() {
-  final result = detectionResult;
+    final result = detectionResult;
 
-  if (result == null || selectedImageBytes == null) {
-    return;
+    if (result == null || selectedImageBytes == null) return;
+
+    final cues = CatCues(
+      movement: result.suggestedMovement,
+      ears: result.suggestedEars,
+      tail: result.suggestedTail,
+      body: result.suggestedBody,
+      vocal: result.suggestedVocal,
+    );
+
+    final prediction = MoodFusionEngine().predict(
+      cues: cues,
+      backendPrediction: backendPrediction,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PredictionResultScreen(
+          imageBytes: selectedImageBytes!,
+          result: prediction,
+          backendPrediction: backendPrediction,
+        ),
+      ),
+    );
   }
-
-  final cues = CatCues(
-    movement: result.suggestedMovement,
-    ears: result.suggestedEars,
-    tail: result.suggestedTail,
-    body: result.suggestedBody,
-    vocal: result.suggestedVocal,
-  );
-
-  final prediction =
-      MoodFusionEngine().predict(
-    cues: cues,
-    backendPrediction: backendPrediction,
-  );
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => PredictionResultScreen(
-
-  imageBytes: selectedImageBytes!,
-
-  result: prediction,
-
-  backendPrediction: backendPrediction,
-
-)
-    ),
-  );
-}
 
   String confidenceText(double confidence) {
     return '${(confidence * 100).toStringAsFixed(1)}%';
@@ -251,15 +277,90 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
     );
   }
 
+  Widget buildVisionPredictionCard() {
+    final prediction = visionPrediction;
+
+    if (prediction == null) return const SizedBox.shrink();
+
+    final featureEntries = prediction.features?.entries.toList() ?? [];
+    final scoreEntries = prediction.scores.entries.toList()
+      ..sort((a, b) => (b.value as num).compareTo(a.value as num));
+
+    return Card(
+      color: Colors.green.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Vision Feature Prediction',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text('Cat detected: ${prediction.catDetected ? "Yes" : "No"}'),
+            Text('Cat confidence: ${confidenceText(prediction.catConfidence)}'),
+            const SizedBox(height: 8),
+            Text('Predicted state: ${prediction.predictedState}'),
+            Text('State confidence: ${confidenceText(prediction.confidence)}'),
+            const SizedBox(height: 12),
+            const Text(
+              'Extracted features:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            if (featureEntries.isEmpty)
+              const Text('No features available.')
+            else
+              ...featureEntries.map(
+                (entry) {
+                  final value = (entry.value as num).toDouble();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('${entry.key}: ${confidenceText(value)}'),
+                  );
+                },
+              ),
+            const SizedBox(height: 12),
+            const Text(
+              'Mood scores:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            ...scoreEntries.map(
+              (entry) {
+                final value = (entry.value as num).toDouble();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text('${entry.key}: ${confidenceText(value)}'),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Reasoning:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            ...prediction.reasoning.map(
+              (reason) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('• $reason'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget buildBackendScores() {
     final prediction = backendPrediction;
 
     if (prediction == null) return const SizedBox.shrink();
 
     final entries = prediction.scores.entries.toList()
-      ..sort(
-        (a, b) => (b.value as num).compareTo(a.value as num),
-      );
+      ..sort((a, b) => (b.value as num).compareTo(a.value as num));
 
     return Card(
       color: Colors.blue.shade50,
@@ -269,7 +370,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Hugging Face Mood Estimate',
+              'Fallback Hugging Face Estimate',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -319,7 +420,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'The app uses TensorFlow.js COCO-SSD for cat detection and a FastAPI + Hugging Face backend for weak mood estimation.',
+            'The app now uses YOLO + visual feature extraction, with CLIP as a fallback estimate.',
           ),
           const SizedBox(height: 24),
           if (selectedImageBytes != null)
@@ -343,7 +444,20 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
                   children: [
                     CircularProgressIndicator(),
                     SizedBox(width: 16),
-                    Text('Running cat detection model...'),
+                    Text('Running browser cat detection...'),
+                  ],
+                ),
+              ),
+            ),
+          if (isVisionPredicting)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 16),
+                    Text('Running YOLO + feature prediction...'),
                   ],
                 ),
               ),
@@ -356,7 +470,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
                   children: [
                     CircularProgressIndicator(),
                     SizedBox(width: 16),
-                    Text('Running Hugging Face mood prediction...'),
+                    Text('Running fallback CLIP prediction...'),
                   ],
                 ),
               ),
@@ -371,18 +485,12 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
                 child: Text(
                   '${detectionResult!.message}\n'
                   'Cat detected: ${detectionResult!.catDetected ? "Yes" : "No"}\n'
-                  'Confidence: ${confidenceText(detectionResult!.confidence)}\n'
-                  'Bounding box: ${detectionResult!.bbox ?? "Not available"}\n\n'
-                  'Suggested cues:\n'
-                  'Movement: ${detectionResult!.suggestedMovement.name}\n'
-                  'Ears: ${detectionResult!.suggestedEars.name}\n'
-                  'Tail: ${detectionResult!.suggestedTail.name}\n'
-                  'Body: ${detectionResult!.suggestedBody.name}\n'
-                  'Vocal: ${detectionResult!.suggestedVocal.name}',
+                  'Confidence: ${confidenceText(detectionResult!.confidence)}',
                   style: const TextStyle(fontSize: 16),
                 ),
               ),
             ),
+          if (visionPrediction != null) buildVisionPredictionCard(),
           if (backendPrediction != null) buildBackendScores(),
           const SizedBox(height: 24),
           FilledButton.icon(
@@ -399,20 +507,15 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed:
-                selectedImageBytes == null ? null : runBackendMoodPrediction,
+                selectedImageBytes == null ? null : runVisionFeaturePrediction,
             icon: const Icon(Icons.psychology),
-            label: const Text('Run Hugging Face Prediction Again'),
+            label: const Text('Run Vision Feature Prediction Again'),
           ),
           const SizedBox(height: 24),
           FilledButton(
-  onPressed:
-      canContinue
-          ? continueToPredictionResult
-          : null,
-  child: const Text(
-    'Generate AI Prediction',
-  ),
-),
+            onPressed: canContinue ? continueToPredictionResult : null,
+            child: const Text('Generate AI Prediction'),
+          ),
         ],
       ),
     );
