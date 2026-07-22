@@ -1,18 +1,11 @@
-import 'dart:convert';
-import 'dart:html' as html;
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../models/backend_prediction.dart';
-import '../models/cat_cues.dart';
-import '../models/cat_detection_result.dart';
-import '../models/vision_feature_prediction.dart';
+import '../models/cat_analysis_result.dart';
 import '../services/backend_api_service.dart';
-import '../services/mood_fusion_engine.dart';
-import '../services/web_cat_detection_service.dart';
+import '../ui/cat_state_ui.dart';
 import 'prediction_result_screen.dart';
 
 class ImageScanScreen extends StatefulWidget {
@@ -23,380 +16,63 @@ class ImageScanScreen extends StatefulWidget {
 }
 
 class _ImageScanScreenState extends State<ImageScanScreen> {
-  static const String imageElementId = 'cat-scan-image';
+  final _picker = ImagePicker();
+  Uint8List? _imageBytes;
+  CatAnalysisResult? _analysis;
+  bool _analyzing = false;
+  String? _error;
 
-  Uint8List? selectedImageBytes;
-  double? originalImageWidth;
-  double? originalImageHeight;
+  Future<void> _pick(ImageSource source) async {
+    final image = await _picker.pickImage(
+      source: source,
+      imageQuality: 86,
+      maxWidth: 1800,
+    );
+    if (image == null) return;
 
-  CatDetectionResult? detectionResult;
-  BackendPrediction? backendPrediction;
-  VisionFeaturePrediction? visionPrediction;
-
-  bool isDetecting = false;
-  bool isBackendPredicting = false;
-  bool isVisionPredicting = false;
-
-  final ImagePicker picker = ImagePicker();
-
-  void updateHiddenHtmlImage(Uint8List imageBytes) {
-    final base64Image = base64Encode(imageBytes);
-    final dataUrl = 'data:image/jpeg;base64,$base64Image';
-
-    final existingElement = html.document.getElementById(imageElementId);
-
-    if (existingElement is html.ImageElement) {
-      existingElement.src = dataUrl;
-      return;
-    }
-
-    final imageElement = html.ImageElement()
-      ..id = imageElementId
-      ..src = dataUrl
-      ..style.display = 'none';
-
-    html.document.body?.append(imageElement);
-  }
-
-  Future<void> updateOriginalImageDimensions(Uint8List imageBytes) async {
-    final codec = await ui.instantiateImageCodec(imageBytes);
-    final frame = await codec.getNextFrame();
-    final image = frame.image;
-
-    originalImageWidth = image.width.toDouble();
-    originalImageHeight = image.height.toDouble();
-  }
-
-  Future<void> runCatDetection() async {
-    if (selectedImageBytes == null) return;
-
-    setState(() {
-      isDetecting = true;
-      detectionResult = null;
-    });
-
-    try {
-      updateHiddenHtmlImage(selectedImageBytes!);
-
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      final result = await WebCatDetectionService().detectCatFromElementId(
-        imageElementId,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        detectionResult = result;
-        isDetecting = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        isDetecting = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cat detection failed: $e')),
-      );
-    }
-  }
-
-  Future<void> runVisionFeaturePrediction() async {
-    if (selectedImageBytes == null) return;
-
-    setState(() {
-      isVisionPredicting = true;
-      visionPrediction = null;
-    });
-
-    try {
-      final prediction = await BackendApiService().predictVisionFeatures(
-        selectedImageBytes!,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        visionPrediction = prediction;
-        isVisionPredicting = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        isVisionPredicting = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Vision feature prediction failed: $e')),
-      );
-    }
-  }
-
-  Future<void> runBackendMoodPrediction() async {
-    if (selectedImageBytes == null) return;
-
-    setState(() {
-      isBackendPredicting = true;
-      backendPrediction = null;
-    });
-
-    try {
-      final prediction = await BackendApiService().predictCatState(
-        selectedImageBytes!,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        backendPrediction = prediction;
-        isBackendPredicting = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        isBackendPredicting = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Fallback CLIP prediction failed: $e')),
-      );
-    }
-  }
-
-  Future<void> handleSelectedImage(XFile image) async {
     final bytes = await image.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _imageBytes = bytes;
+      _analysis = null;
+      _error = null;
+    });
+    await _analyze();
+  }
 
-    await updateOriginalImageDimensions(bytes);
+  Future<void> _analyze() async {
+    final bytes = _imageBytes;
+    if (bytes == null || _analyzing) return;
 
     setState(() {
-      selectedImageBytes = bytes;
-      detectionResult = null;
-      backendPrediction = null;
-      visionPrediction = null;
+      _analyzing = true;
+      _analysis = null;
+      _error = null;
     });
 
-    await runCatDetection();
-    await runVisionFeaturePrediction();
-    await runBackendMoodPrediction();
+    try {
+      final result = await BackendApiService().analyzeCat(bytes);
+      if (!mounted) return;
+      setState(() => _analysis = result);
+    } on BackendApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _analyzing = false);
+    }
   }
 
-  Future<void> pickFromGallery() async {
-    final XFile? image = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-    );
-
-    if (image == null) return;
-
-    await handleSelectedImage(image);
-  }
-
-  Future<void> takePhoto() async {
-    final XFile? image = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 80,
-    );
-
-    if (image == null) return;
-
-    await handleSelectedImage(image);
-  }
-
-  void continueToPredictionResult() {
-    final result = detectionResult;
-
-    if (result == null || selectedImageBytes == null) return;
-
-    final cues = CatCues(
-      movement: result.suggestedMovement,
-      ears: result.suggestedEars,
-      tail: result.suggestedTail,
-      body: result.suggestedBody,
-      vocal: result.suggestedVocal,
-    );
-
-    final prediction = MoodFusionEngine().predict(
-      cues: cues,
-      backendPrediction: backendPrediction,
-    );
-
+  void _continue() {
+    final prediction = _analysis?.prediction;
+    if (prediction == null || _imageBytes == null) return;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => PredictionResultScreen(
-          imageBytes: selectedImageBytes!,
+          imageBytes: _imageBytes,
           result: prediction,
-          backendPrediction: backendPrediction,
-        ),
-      ),
-    );
-  }
-
-  String confidenceText(double confidence) {
-    return '${(confidence * 100).toStringAsFixed(1)}%';
-  }
-
-  Widget buildImageWithBoundingBox() {
-    final bbox = detectionResult?.bbox;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const displayedHeight = 260.0;
-        final displayedWidth = constraints.maxWidth;
-
-        return Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.memory(
-                selectedImageBytes!,
-                height: displayedHeight,
-                width: displayedWidth,
-                fit: BoxFit.contain,
-              ),
-            ),
-            if (bbox != null && bbox.length == 4)
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: BoundingBoxPainter(
-                    bbox: bbox,
-                    displayedWidth: displayedWidth,
-                    displayedHeight: displayedHeight,
-                    originalImageWidth: originalImageWidth,
-                    originalImageHeight: originalImageHeight,
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget buildVisionPredictionCard() {
-    final prediction = visionPrediction;
-
-    if (prediction == null) return const SizedBox.shrink();
-
-    final featureEntries = prediction.features?.entries.toList() ?? [];
-    final scoreEntries = prediction.scores.entries.toList()
-      ..sort((a, b) => (b.value as num).compareTo(a.value as num));
-
-    return Card(
-      color: Colors.green.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Vision Feature Prediction',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text('Cat detected: ${prediction.catDetected ? "Yes" : "No"}'),
-            Text('Cat confidence: ${confidenceText(prediction.catConfidence)}'),
-            const SizedBox(height: 8),
-            Text('Predicted state: ${prediction.predictedState}'),
-            Text('State confidence: ${confidenceText(prediction.confidence)}'),
-            const SizedBox(height: 12),
-            const Text(
-              'Extracted features:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            if (featureEntries.isEmpty)
-              const Text('No features available.')
-            else
-              ...featureEntries.map(
-                (entry) {
-                  final value = (entry.value as num).toDouble();
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text('${entry.key}: ${confidenceText(value)}'),
-                  );
-                },
-              ),
-            const SizedBox(height: 12),
-            const Text(
-              'Mood scores:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            ...scoreEntries.map(
-              (entry) {
-                final value = (entry.value as num).toDouble();
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('${entry.key}: ${confidenceText(value)}'),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Reasoning:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            ...prediction.reasoning.map(
-              (reason) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text('• $reason'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildBackendScores() {
-    final prediction = backendPrediction;
-
-    if (prediction == null) return const SizedBox.shrink();
-
-    final entries = prediction.scores.entries.toList()
-      ..sort((a, b) => (b.value as num).compareTo(a.value as num));
-
-    return Card(
-      color: Colors.blue.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Fallback Hugging Face Estimate',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text('Top label: ${prediction.predictedLabel}'),
-            Text('Confidence: ${confidenceText(prediction.confidence)}'),
-            const SizedBox(height: 8),
-            Text(
-              prediction.warning,
-              style: const TextStyle(fontStyle: FontStyle.italic),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'All scores:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            ...entries.map(
-              (entry) {
-                final value = (entry.value as num).toDouble();
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('${entry.key}: ${confidenceText(value)}'),
-                );
-              },
-            ),
-          ],
+          advisory: _analysis!.advisory,
+          sourceLabel: 'Photo analysis',
         ),
       ),
     );
@@ -404,117 +80,187 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canContinue =
-        selectedImageBytes != null && detectionResult?.catDetected == true;
-
+    final analysis = _analysis;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scan Cat Image'),
+      appBar: AppBar(title: const Text('Photo scan')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
+            children: [
+              Text(
+                'Let’s read the visible signals.',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.8,
+                ),
+              ),
+              const SizedBox(height: 9),
+              Text(
+                'Choose one clear, recent photo. Avoid filters and make sure most of the cat is visible.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              _ImagePanel(
+                imageBytes: _imageBytes,
+                analysis: analysis,
+                analyzing: _analyzing,
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _analyzing
+                        ? null
+                        : () => _pick(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: Text(
+                      _imageBytes == null ? 'Choose a photo' : 'Choose another',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _analyzing
+                        ? null
+                        : () => _pick(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('Use camera'),
+                  ),
+                  if (_imageBytes != null && !_analyzing)
+                    TextButton.icon(
+                      onPressed: _analyze,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Analyze again'),
+                    ),
+                ],
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 18),
+                _MessageCard(
+                  icon: Icons.cloud_off_outlined,
+                  title: 'We couldn’t complete the scan',
+                  body: _error!,
+                  color: const Color(0xFFB44949),
+                ),
+              ],
+              if (analysis != null && !analysis.catDetected) ...[
+                const SizedBox(height: 18),
+                const _MessageCard(
+                  icon: Icons.search_off_rounded,
+                  title: 'No cat found in this photo',
+                  body:
+                      'Try a brighter image with the cat centered and their head and body visible.',
+                  color: Color(0xFF9A641F),
+                ),
+              ],
+              if (analysis?.prediction != null) ...[
+                const SizedBox(height: 18),
+                _ReadyCard(analysis: analysis!),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: _continue,
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                  label: const Text('See the full result'),
+                ),
+              ],
+              const SizedBox(height: 22),
+              const _PhotoTips(),
+            ],
+          ),
+        ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
+    );
+  }
+}
+
+class _ImagePanel extends StatelessWidget {
+  final Uint8List? imageBytes;
+  final CatAnalysisResult? analysis;
+  final bool analyzing;
+
+  const _ImagePanel({
+    required this.imageBytes,
+    required this.analysis,
+    required this.analyzing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 380,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDE8F5),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFFDCD3E9)),
+      ),
+      child: imageBytes == null
+          ? const _EmptyImage()
+          : Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.memory(imageBytes!, fit: BoxFit.contain),
+                if (analysis?.bbox != null)
+                  CustomPaint(
+                    painter: _BoundingBoxPainter(
+                      bbox: analysis!.bbox!,
+                      imageWidth: analysis!.imageWidth,
+                      imageHeight: analysis!.imageHeight,
+                    ),
+                  ),
+                if (analyzing)
+                  Container(
+                    color: Colors.black.withValues(alpha: 0.48),
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(color: Colors.white),
+                          SizedBox(height: 16),
+                          Text(
+                            'Looking for visible signals…',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _EmptyImage extends StatelessWidget {
+  const _EmptyImage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            'Capture or upload a cat image',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          Icon(
+            Icons.add_photo_alternate_outlined,
+            size: 62,
+            color: Color(0xFF806F96),
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'The app now uses YOLO + visual feature extraction, with CLIP as a fallback estimate.',
-          ),
-          const SizedBox(height: 24),
-          if (selectedImageBytes != null)
-            buildImageWithBoundingBox()
-          else
-            Container(
-              height: 260,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey),
-              ),
-              child: const Text('No image selected'),
+          SizedBox(height: 14),
+          Text(
+            'Your photo will appear here',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF685A7A),
             ),
-          const SizedBox(height: 20),
-          if (isDetecting)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(width: 16),
-                    Text('Running browser cat detection...'),
-                  ],
-                ),
-              ),
-            ),
-          if (isVisionPredicting)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(width: 16),
-                    Text('Running YOLO + feature prediction...'),
-                  ],
-                ),
-              ),
-            ),
-          if (isBackendPredicting)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(width: 16),
-                    Text('Running fallback CLIP prediction...'),
-                  ],
-                ),
-              ),
-            ),
-          if (detectionResult != null)
-            Card(
-              color: detectionResult!.catDetected
-                  ? Colors.green.shade50
-                  : Colors.red.shade50,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  '${detectionResult!.message}\n'
-                  'Cat detected: ${detectionResult!.catDetected ? "Yes" : "No"}\n'
-                  'Confidence: ${confidenceText(detectionResult!.confidence)}',
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
-            ),
-          if (visionPrediction != null) buildVisionPredictionCard(),
-          if (backendPrediction != null) buildBackendScores(),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: takePhoto,
-            icon: const Icon(Icons.camera_alt),
-            label: const Text('Take Photo'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: pickFromGallery,
-            icon: const Icon(Icons.photo_library),
-            label: const Text('Choose from Gallery'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed:
-                selectedImageBytes == null ? null : runVisionFeaturePrediction,
-            icon: const Icon(Icons.psychology),
-            label: const Text('Run Vision Feature Prediction Again'),
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: canContinue ? continueToPredictionResult : null,
-            child: const Text('Generate AI Prediction'),
           ),
         ],
       ),
@@ -522,97 +268,181 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
   }
 }
 
-class BoundingBoxPainter extends CustomPainter {
-  final List<double> bbox;
-  final double displayedWidth;
-  final double displayedHeight;
-  final double? originalImageWidth;
-  final double? originalImageHeight;
+class _ReadyCard extends StatelessWidget {
+  final CatAnalysisResult analysis;
+  const _ReadyCard({required this.analysis});
 
-  BoundingBoxPainter({
+  @override
+  Widget build(BuildContext context) {
+    final state = analysis.prediction!.state;
+    final color = state.color(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(state.icon, color: color),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Cat found — result ready',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Detection confidence ${(analysis.detectionConfidence * 100).round()}%',
+                    style: const TextStyle(color: Color(0xFF6E6675)),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.check_circle_rounded, color: color),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+  final Color color;
+  const _MessageCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(fontWeight: FontWeight.w800, color: color),
+                ),
+                const SizedBox(height: 5),
+                Text(body, style: const TextStyle(height: 1.45)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhotoTips extends StatelessWidget {
+  const _PhotoTips();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Card(
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Wrap(
+          spacing: 22,
+          runSpacing: 12,
+          children: [
+            _Tip(icon: Icons.light_mode_outlined, text: 'Good light'),
+            _Tip(
+              icon: Icons.center_focus_strong_rounded,
+              text: 'Whole cat visible',
+            ),
+            _Tip(
+              icon: Icons.motion_photos_paused_outlined,
+              text: 'No motion blur',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Tip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _Tip({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 20, color: Color(0xFF7254D6)),
+      SizedBox(width: 8),
+      Text(text, style: TextStyle(fontWeight: FontWeight.w700)),
+    ],
+  );
+}
+
+class _BoundingBoxPainter extends CustomPainter {
+  final List<double> bbox;
+  final double imageWidth;
+  final double imageHeight;
+
+  const _BoundingBoxPainter({
     required this.bbox,
-    required this.displayedWidth,
-    required this.displayedHeight,
-    required this.originalImageWidth,
-    required this.originalImageHeight,
+    required this.imageWidth,
+    required this.imageHeight,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (bbox.length != 4 || imageWidth <= 0 || imageHeight <= 0) return;
+    final scale = (size.width / imageWidth < size.height / imageHeight)
+        ? size.width / imageWidth
+        : size.height / imageHeight;
+    final drawnWidth = imageWidth * scale;
+    final drawnHeight = imageHeight * scale;
+    final offsetX = (size.width - drawnWidth) / 2;
+    final offsetY = (size.height - drawnHeight) / 2;
+    final rect = Rect.fromLTRB(
+      offsetX + bbox[0] * scale,
+      offsetY + bbox[1] * scale,
+      offsetX + bbox[2] * scale,
+      offsetY + bbox[3] * scale,
+    );
     final paint = Paint()
+      ..color = const Color(0xFF8BFFCE)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..color = Colors.green;
-
-    final labelPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..color = Colors.green;
-
-    final originalWidth = originalImageWidth;
-    final originalHeight = originalImageHeight;
-
-    if (originalWidth == null || originalHeight == null) return;
-    if (originalWidth <= 0 || originalHeight <= 0) return;
-
-    final sourceX = bbox[0];
-    final sourceY = bbox[1];
-    final sourceW = bbox[2];
-    final sourceH = bbox[3];
-
-    final scaleX = displayedWidth / originalWidth;
-    final scaleY = displayedHeight / originalHeight;
-
-    final coverScale = scaleX > scaleY ? scaleX : scaleY;
-    final scaledImageWidth = originalWidth * coverScale;
-    final scaledImageHeight = originalHeight * coverScale;
-    final cropOffsetX = (displayedWidth - scaledImageWidth) / 2;
-    final cropOffsetY = (displayedHeight - scaledImageHeight) / 2;
-
-    final rect = Rect.fromLTWH(
-      sourceX * coverScale + cropOffsetX,
-      sourceY * coverScale + cropOffsetY,
-      sourceW * coverScale,
-      sourceH * coverScale,
+      ..strokeWidth = 3;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(12)),
+      paint,
     );
-
-    canvas.save();
-    canvas.clipRect(Rect.fromLTWH(0, 0, displayedWidth, displayedHeight));
-    canvas.drawRect(rect, paint);
-
-    final labelTop = rect.top - 28 < 0 ? rect.top : rect.top - 28;
-
-    canvas.drawRect(
-      Rect.fromLTWH(rect.left, labelTop, 120, 28),
-      labelPaint,
-    );
-
-    final textPainter = TextPainter(
-      text: const TextSpan(
-        text: 'CAT',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-
-    textPainter.layout();
-    textPainter.paint(
-      canvas,
-      Offset(rect.left + 8, labelTop + 4),
-    );
-
-    canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant BoundingBoxPainter oldDelegate) {
-    return oldDelegate.bbox != bbox ||
-        oldDelegate.originalImageWidth != originalImageWidth ||
-        oldDelegate.originalImageHeight != originalImageHeight ||
-        oldDelegate.displayedWidth != displayedWidth ||
-        oldDelegate.displayedHeight != displayedHeight;
-  }
+  bool shouldRepaint(covariant _BoundingBoxPainter oldDelegate) =>
+      oldDelegate.bbox != bbox ||
+      oldDelegate.imageWidth != imageWidth ||
+      oldDelegate.imageHeight != imageHeight;
 }

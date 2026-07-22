@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'screens/home_screen.dart';
+import 'ui/cattalk_theme.dart';
 
-void main() {
-  runApp(const CatTalkApp());
-}
+void main() => runApp(const CatTalkApp());
 
 class CatTalkApp extends StatelessWidget {
   const CatTalkApp({super.key});
@@ -12,12 +11,9 @@ class CatTalkApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'CatTalk AI',
+      title: 'CatTalk',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: Colors.deepPurple,
-        useMaterial3: true,
-      ),
+      theme: buildCatTalkTheme(),
       home: const HomeScreen(),
     );
   }

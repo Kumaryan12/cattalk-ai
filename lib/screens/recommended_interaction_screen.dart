@@ -1,253 +1,359 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/cat_sound.dart';
 import '../models/cat_state.dart';
-import '../models/interaction_feedback.dart';
 import '../services/audio_service.dart';
 import '../services/sound_library_service.dart';
+import '../ui/cat_state_ui.dart';
+import '../ui/cattalk_theme.dart';
 import 'interaction_goal_screen.dart';
-import 'reaction_feedback_screen.dart';
 
-class RecommendedInteractionScreen extends StatelessWidget {
+class RecommendedInteractionScreen extends StatefulWidget {
   final CatStateResult result;
   final UserGoal goal;
-
   const RecommendedInteractionScreen({
     super.key,
     required this.result,
     required this.goal,
   });
 
-  String stateName(CatState state) {
-    switch (state) {
-      case CatState.relaxed:
-        return 'Relaxed';
-      case CatState.exploratorySocial:
-        return 'Exploratory / Social';
-      case CatState.alertCautious:
-        return 'Alert / Cautious';
-      case CatState.playfulActive:
-        return 'Playful / Active';
-      case CatState.defensiveStressed:
-        return 'Defensive / Stressed';
-      case CatState.attentionSeeking:
-        return 'Attention Seeking';
-      case CatState.unknown:
-        return 'Unknown';
-    }
+  @override
+  State<RecommendedInteractionScreen> createState() =>
+      _RecommendedInteractionScreenState();
+}
+
+class _RecommendedInteractionScreenState
+    extends State<RecommendedInteractionScreen> {
+  final _audio = AudioService();
+  StreamSubscription<void>? _completionSubscription;
+  bool _playing = false;
+  double _volume = 0.35;
+
+  @override
+  void initState() {
+    super.initState();
+    _completionSubscription = _audio.onComplete.listen((_) {
+      if (mounted) setState(() => _playing = false);
+    });
   }
 
-  String goalName(UserGoal goal) {
-    switch (goal) {
-      case UserGoal.calmCat:
-        return 'Calm the Cat';
-      case UserGoal.callCat:
-        return 'Call the Cat';
-      case UserGoal.playWithCat:
-        return 'Play with the Cat';
-      case UserGoal.buildTrust:
-        return 'Build Trust';
-      case UserGoal.getAttention:
-        return 'Get Attention';
-    }
-  }
-
-  InteractionCommand commandFromGoal(UserGoal goal) {
-    switch (goal) {
-      case UserGoal.calmCat:
-        return InteractionCommand.calmDown;
-      case UserGoal.callCat:
-        return InteractionCommand.comeHere;
-      case UserGoal.playWithCat:
-        return InteractionCommand.letsPlay;
-      case UserGoal.buildTrust:
-        return InteractionCommand.friendlyGreeting;
-      case UserGoal.getAttention:
-        return InteractionCommand.friendlyGreeting;
-    }
-  }
-
-  CatSound recommendedSound() {
+  CatSound _sound() {
     final sounds = SoundLibraryService().getAllSounds();
-    final state = result.state;
-
-    if (state == CatState.defensiveStressed || state == CatState.alertCautious) {
-      if (goal == UserGoal.calmCat || goal == UserGoal.buildTrust) {
-        return sounds.firstWhere((s) => s.id == 'calm_purr_01');
-      }
-      return sounds.firstWhere((s) => s.id == 'soft_trill_01');
+    final state = widget.result.state;
+    if (state == CatState.defensiveStressed ||
+        state == CatState.alertCautious) {
+      return sounds.firstWhere(
+        (sound) =>
+            sound.id ==
+            (widget.goal == UserGoal.calmCat
+                ? 'calm_purr_01'
+                : 'soft_trill_01'),
+      );
     }
-
-    if (goal == UserGoal.playWithCat) {
-      return sounds.firstWhere((s) => s.id == 'play_chirp_01');
+    switch (widget.goal) {
+      case UserGoal.playWithCat:
+        return sounds.firstWhere((sound) => sound.id == 'play_chirp_01');
+      case UserGoal.callCat:
+      case UserGoal.getAttention:
+        return sounds.firstWhere((sound) => sound.id == 'short_meow_01');
+      case UserGoal.calmCat:
+        return sounds.firstWhere((sound) => sound.id == 'calm_purr_01');
+      case UserGoal.buildTrust:
+        return sounds.firstWhere((sound) => sound.id == 'soft_trill_01');
     }
-
-    if (goal == UserGoal.callCat) {
-      return sounds.firstWhere((s) => s.id == 'short_meow_01');
-    }
-
-    if (goal == UserGoal.getAttention) {
-      return sounds.firstWhere((s) => s.id == 'short_meow_01');
-    }
-
-    if (goal == UserGoal.calmCat) {
-      return sounds.firstWhere((s) => s.id == 'calm_purr_01');
-    }
-
-    return sounds.firstWhere((s) => s.id == 'soft_trill_01');
   }
 
-  String recommendationText(CatSound sound) {
-    final state = result.state;
-
+  List<String> _steps() {
+    final state = widget.result.state;
     if (state == CatState.defensiveStressed) {
-      return '''
-• Keep distance initially
-• Avoid sudden movement
-• Avoid direct staring
-• Use low volume
-• Recommended sound: ${sound.displayName}
-''';
+      return [
+        'Create distance and leave a clear exit path.',
+        'Lower your body, look slightly away, and keep hands still.',
+        'If you use the sound, play it once at low volume.',
+        'Stop immediately if the cat retreats, hisses, or stiffens.',
+      ];
     }
-
     if (state == CatState.alertCautious) {
-      return '''
-• Move slowly
-• Use soft sound only
-• Let the cat approach first
-• Avoid overstimulation
-• Recommended sound: ${sound.displayName}
-''';
+      return [
+        'Pause and let the cat observe you first.',
+        'Move slowly and avoid leaning over them.',
+        'Play the sound once, then wait quietly.',
+        'Let the cat decide whether to approach.',
+      ];
     }
-
-    if (state == CatState.playfulActive) {
-      return '''
-• Use playful body language
-• Introduce a toy
-• Keep interaction short and fun
-• Recommended sound: ${sound.displayName}
-''';
+    if (state == CatState.playfulActive &&
+        widget.goal == UserGoal.playWithCat) {
+      return [
+        'Prepare a wand or toss toy before playing the cue.',
+        'Play the sound once to begin the routine.',
+        'Keep the session short and let the cat catch the toy.',
+        'Finish with a calm pause rather than abrupt handling.',
+      ];
     }
+    return [
+      'Approach slowly from the side.',
+      'Play the sound once at a comfortable volume.',
+      'Wait several seconds instead of repeating it.',
+      'Continue only if the cat stays loose and chooses to engage.',
+    ];
+  }
 
-    return '''
-• Use calm interaction
-• Observe the cat response carefully
-• Stop if the cat moves away
-• Recommended sound: ${sound.displayName}
-''';
+  Future<void> _toggleSound(CatSound sound) async {
+    if (_playing) {
+      await _audio.stopSound();
+    } else {
+      await _audio.setVolume(_volume);
+      await _audio.playSound(sound.assetName);
+    }
+    if (mounted) setState(() => _playing = !_playing);
+  }
+
+  @override
+  void dispose() {
+    _completionSubscription?.cancel();
+    _audio.stopSound();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final sound = recommendedSound();
-    final command = commandFromGoal(goal);
-
+    final sound = _sound();
+    final state = widget.result.state;
+    final color = state.color(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('AI Interaction Recommendation'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Detected State: ${stateName(result.state)}',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
+      appBar: AppBar(title: const Text('Interaction plan')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(26),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      color.withValues(alpha: 0.16),
+                      const Color(0xFFFFF5EC),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text('Goal: ${goalName(goal)}'),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Recommended Interaction',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    recommendationText(sound),
-                    style: const TextStyle(fontSize: 16, height: 1.5),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          Card(
-            color: Colors.purple.shade50,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Recommended Sound\n'
-                'Name: ${sound.displayName}\n'
-                'Type: ${sound.type.name}\n'
-                'Energy: ${sound.energy}\n'
-                'Best for: ${sound.bestFor}',
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          FilledButton.icon(
-            onPressed: () async {
-              await AudioService().playSound(sound.assetName);
-
-              if (!context.mounted) return;
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Played ${sound.displayName}'),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: color.withValues(alpha: 0.16)),
                 ),
-              );
-            },
-            icon: const Icon(Icons.volume_up),
-            label: const Text('Play Recommended Sound'),
-          ),
-          const SizedBox(height: 12),
-
-          OutlinedButton.icon(
-            onPressed: () async {
-              await AudioService().stopSound();
-            },
-            icon: const Icon(Icons.stop),
-            label: const Text('Stop Sound'),
-          ),
-
-          const SizedBox(height: 12),
-
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ReactionFeedbackScreen(
-                    predictedState: result.state,
-                    finalState: result.state,
-                    stateConfidence: result.confidence,
-                    command: command,
-                    goal: goalName(goal),
-                    soundUsed: sound.id,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.goal.label.toUpperCase(),
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.1,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Keep it gentle.\nLet your cat choose.',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'This plan is tuned for a cat that appears ${state.label.toLowerCase()}.',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        height: 1.45,
+                        color: Color(0xFF5F5866),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Try this',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ..._steps().asMap().entries.map(
+                        (entry) => Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${entry.key + 1}',
+                                  style: TextStyle(
+                                    color: color,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 3),
+                                  child: Text(
+                                    entry.value,
+                                    style: const TextStyle(height: 1.4),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
-            icon: const Icon(Icons.feedback),
-            label: const Text('Record Cat Reaction'),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: CatTalkColors.lilac,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(
+                              Icons.graphic_eq_rounded,
+                              color: CatTalkColors.plum,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  sound.displayName,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                Text(
+                                  '${sound.energy} energy · ${sound.bestFor}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF6E6675),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.volume_down_rounded,
+                            color: CatTalkColors.mutedInk,
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: _volume,
+                              min: 0.15,
+                              max: 0.60,
+                              divisions: 9,
+                              label: '${(_volume * 100).round()}%',
+                              onChanged: _playing
+                                  ? null
+                                  : (value) => setState(() => _volume = value),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 44,
+                            child: Text(
+                              '${(_volume * 100).round()}%',
+                              textAlign: TextAlign.end,
+                              style: const TextStyle(
+                                color: CatTalkColors.mutedInk,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () => _toggleSound(sound),
+                          icon: Icon(
+                            _playing
+                                ? Icons.stop_rounded
+                                : Icons.play_arrow_rounded,
+                          ),
+                          label: Text(
+                            _playing ? 'Stop sound' : 'Play once at low volume',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        child: Text(
+                          _playing
+                              ? 'Playing once — watch your cat, and stop if they seem uncomfortable.'
+                              : 'The sound stops automatically. Never use it to corner or repeatedly call the cat.',
+                          key: ValueKey(_playing),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            height: 1.4,
+                            color: CatTalkColors.mutedInk,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                onPressed: () {
+                  _audio.stopSound();
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                },
+                icon: const Icon(Icons.camera_alt_outlined),
+                label: const Text('Start a new scan'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Choose a different goal'),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

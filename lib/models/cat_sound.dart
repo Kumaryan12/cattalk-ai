@@ -1,10 +1,4 @@
-enum SoundType {
-  trill,
-  meow,
-  chirp,
-  purr,
-  call,
-}
+enum SoundType { trill, meow, chirp, purr, call }
 
 class CatSound {
   final String id;

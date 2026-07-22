@@ -18,23 +18,44 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="CatTalk AI - Personalized cat interaction MVP.">
+  <meta name="description" content="CatTalk helps you read visible cat behavior and choose a gentle interaction.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="cattalk_ai">
+  <meta name="theme-color" content="#6D4BC3">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="CatTalk">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>CatTalk AI</title>
+  <title>CatTalk for Mrunali — Happy Birthday!</title>
   <link rel="manifest" href="manifest.json">
 
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #F9F6F1; }
+    #cattalk-loading {
+      position: fixed; inset: 0; z-index: 9999; display: grid;
+      place-items: center; background: linear-gradient(145deg, #FFFDF9, #F1EAFF);
+      color: #211C2B; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      transition: opacity 220ms ease;
+    }
+    .cattalk-loader { text-align: center; }
+    .cattalk-mark {
+      width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 22px;
+      display: grid; place-items: center; background: linear-gradient(145deg, #7959D2, #51359B);
+      box-shadow: 0 16px 38px rgba(81, 53, 155, .24); color: white; font-size: 30px;
+      animation: cattalk-breathe 1.4s ease-in-out infinite alternate;
+    }
+    .cattalk-loader strong { display: block; font-size: 21px; letter-spacing: -.4px; }
+    .cattalk-loader span { display: block; margin-top: 6px; color: #6C6475; font-size: 14px; }
+    @keyframes cattalk-breathe { to { transform: translateY(-4px); box-shadow: 0 22px 44px rgba(81, 53, 155, .3); } }
+  </style>
+
   <!-- TensorFlow.js + COCO-SSD object detection model -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
 
   <script>
     let catDetectorModel = null;
@@ -86,6 +107,13 @@
   </script>
 </head>
 <body>
+  <div id="cattalk-loading" role="status" aria-label="Loading CatTalk">
+    <div class="cattalk-loader">
+      <div class="cattalk-mark">♥</div>
+      <strong>CatTalk</strong>
+      <span>A birthday surprise for Mrunali…</span>
+    </div>
+  </div>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
@@ -95,5 +123,13 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    window.addEventListener('flutter-first-frame', () => {
+      const loader = document.getElementById('cattalk-loading');
+      if (!loader) return;
+      loader.style.opacity = '0';
+      setTimeout(() => loader.remove(), 240);
+    });
+  </script>
 </body>
 </html>

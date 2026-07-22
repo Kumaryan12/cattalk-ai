@@ -1,11 +1,11 @@
 {
-    "name": "cattalk_ai",
-    "short_name": "cattalk_ai",
+    "name": "CatTalk for Mrunali",
+    "short_name": "CatTalk",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F9F6F1",
+    "theme_color": "#6D4BC3",
+    "description": "Read visible cat signals and choose a gentle next step.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -1,353 +1,329 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../models/backend_prediction.dart';
 import '../models/cat_state.dart';
-import '../models/training_sample.dart';
-import '../services/backend_storage_service.dart';
-import '../services/training_memory_service.dart';
+import '../ui/cat_state_ui.dart';
+import '../ui/cattalk_theme.dart';
 import 'interaction_goal_screen.dart';
 
-class PredictionResultScreen extends StatefulWidget {
-  final Uint8List imageBytes;
+class PredictionResultScreen extends StatelessWidget {
+  final Uint8List? imageBytes;
   final CatStateResult result;
-  final BackendPrediction? backendPrediction;
+  final String advisory;
+  final String sourceLabel;
+  final String secondaryActionLabel;
 
   const PredictionResultScreen({
     super.key,
-    required this.imageBytes,
+    this.imageBytes,
     required this.result,
-    required this.backendPrediction,
+    required this.advisory,
+    required this.sourceLabel,
+    this.secondaryActionLabel = 'Try a different photo',
   });
 
-  @override
-  State<PredictionResultScreen> createState() => _PredictionResultScreenState();
-}
-
-class _PredictionResultScreenState extends State<PredictionResultScreen> {
-  CatState? correctedState;
-  bool showCorrectionPicker = false;
-  bool isSaving = false;
-
-  String stateName(CatState state) {
-    switch (state) {
-      case CatState.relaxed:
-        return 'Relaxed';
-      case CatState.exploratorySocial:
-        return 'Exploratory / Social';
-      case CatState.alertCautious:
-        return 'Alert / Cautious';
-      case CatState.playfulActive:
-        return 'Playful / Active';
-      case CatState.defensiveStressed:
-        return 'Defensive / Stressed';
-      case CatState.attentionSeeking:
-        return 'Attention Seeking';
-      case CatState.unknown:
-        return 'Unknown';
-    }
-  }
-
-  String confidenceLabel(double confidence) {
-    if (confidence >= 0.70) return 'High';
-    if (confidence >= 0.45) return 'Medium';
-    return 'Low';
-  }
-
-  Color moodColor(CatState state) {
-    switch (state) {
-      case CatState.relaxed:
-        return Colors.green;
-      case CatState.exploratorySocial:
-        return Colors.teal;
-      case CatState.alertCautious:
-        return Colors.orange;
-      case CatState.playfulActive:
-        return Colors.blue;
-      case CatState.defensiveStressed:
-        return Colors.red;
-      case CatState.attentionSeeking:
-        return Colors.purple;
-      case CatState.unknown:
-        return Colors.grey;
-    }
-  }
-
-  String friendlySummary(CatState state) {
-    switch (state) {
-      case CatState.relaxed:
-        return 'Your cat appears calm and comfortable.';
-      case CatState.exploratorySocial:
-        return 'Your cat appears curious and socially open.';
-      case CatState.alertCautious:
-        return 'Your cat appears alert and cautious.';
-      case CatState.playfulActive:
-        return 'Your cat appears active and playful.';
-      case CatState.defensiveStressed:
-        return 'Your cat may be stressed or defensive. Approach gently.';
-      case CatState.attentionSeeking:
-        return 'Your cat may be trying to get attention.';
-      case CatState.unknown:
-        return 'The system is not confident enough to classify this state.';
-    }
-  }
-
-  Map<String, dynamic> fusionScoresToJson() {
-    return widget.result.scores.map(
-      (state, score) => MapEntry(stateName(state), score),
-    );
-  }
-
-  Future<void> saveFeedback({
-    required bool correct,
-  }) async {
-    if (isSaving) return;
-
-    final finalState = correct ? widget.result.state : correctedState;
-    if (finalState == null) return;
-
-    setState(() {
-      isSaving = true;
-    });
-
-    final hf = widget.backendPrediction;
-
-    String? imagePath;
-    try {
-      imagePath = await BackendStorageService().uploadImage(widget.imageBytes);
-    } catch (_) {
-      imagePath = null;
-    }
-
-    final sample = TrainingSample(
-      imageBase64: base64Encode(widget.imageBytes),
-      imagePath: imagePath,
-      hfPredictedLabel: hf?.predictedLabel,
-      hfConfidence: hf?.confidence,
-      hfScores: hf?.scores,
-      fusionPredictedState: stateName(widget.result.state),
-      fusionConfidence: widget.result.confidence,
-      fusionScores: fusionScoresToJson(),
-      reasoning: widget.result.reasons,
-      correctedState: stateName(finalState),
-      timestamp: DateTime.now(),
-    );
-
-    await TrainingMemoryService().saveSample(sample);
-
-    if (imagePath != null) {
-      await BackendStorageService().uploadTrainingSample(sample);
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      isSaving = false;
-    });
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => InteractionGoalScreen(
-          result: widget.result,
-        ),
-      ),
-    );
+  String _confidenceLabel(double confidence, bool isMixed) {
+    if (isMixed) return 'Mixed visual signals';
+    if (confidence >= 0.62) return 'Clear visual match';
+    if (confidence >= 0.38) return 'Moderate visual match';
+    return 'Mixed visual signals';
   }
 
   @override
   Widget build(BuildContext context) {
-    final result = widget.result;
-    final color = moodColor(result.state);
-    final reasons = result.reasons.take(3).toList();
+    final state = result.state;
+    final color = state.color(context);
+    final ranked = result.scores.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final second = ranked.length > 1 ? ranked[1] : null;
+    final isMixed =
+        second != null &&
+        second.value >= 0.16 &&
+        (ranked.first.value - second.value) < 0.12;
+    final resultLabel = isMixed
+        ? '${ranked.first.key.label} or ${second.key.label}'
+        : state.label;
+    final resultSummary = isMixed
+        ? 'The snapshot contains overlapping visual patterns for both states. Treat this as an uncertain estimate and respond to whichever signs you can observe directly.'
+        : state.summary;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('AI Prediction'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Image.memory(
-              widget.imageBytes,
-              height: 280,
-              width: double.infinity,
-              fit: BoxFit.contain,
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'AI Mood Estimate',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+      appBar: AppBar(title: const Text('Your result')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+            children: [
+              _ResultHero(
+                imageBytes: imageBytes,
+                state: state,
+                color: color,
+                sourceLabel: sourceLabel,
+                resultLabel: resultLabel,
+                resultSummary: resultSummary,
+                confidence: result.confidence,
+                confidenceLabel: _confidenceLabel(result.confidence, isMixed),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'What shaped this estimate?',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      ...result.reasons.map(
+                        (reason) => Padding(
+                          padding: const EdgeInsets.only(bottom: 11),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.check_circle_outline_rounded,
+                                size: 20,
+                                color: color,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  reason,
+                                  style: const TextStyle(height: 1.45),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (ranked.length > 1) ...[
+                        const SizedBox(height: 5),
+                        ExpansionTile(
+                          tilePadding: EdgeInsets.zero,
+                          childrenPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'See all visual matches',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          children: ranked
+                              .map(
+                                (entry) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 9),
+                                  child: Row(
+                                    children: [
+                                      Expanded(child: Text(entry.key.label)),
+                                      Text(
+                                        '${(entry.value * 100).round()}%',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
+                    ],
                   ),
-
-                  const SizedBox(height: 12),
-
-                  Text(
-                    stateName(result.state),
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                      color: color,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(19),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3E8),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.info_outline_rounded,
+                      color: Color(0xFFAA661F),
                     ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    friendlySummary(result.state),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.4,
-                    ),
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  Text(
-                    'Confidence: ${confidenceLabel(result.confidence)} '
-                    '(${(result.confidence * 100).toStringAsFixed(1)}%)',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: LinearProgressIndicator(
-                      value: result.confidence.clamp(0.0, 1.0),
-                      minHeight: 10,
-                      backgroundColor: Colors.grey.shade200,
-                      color: color,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  const Text(
-                    'Why this result?',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  if (reasons.isEmpty)
-                    const Text('No detailed reasoning available.')
-                  else
-                    ...reasons.map(
-                      (reason) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text(
-                          '• $reason',
-                          style: const TextStyle(height: 1.35),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        advisory,
+                        style: const TextStyle(
+                          color: Color(0xFF704717),
+                          height: 1.45,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(height: 22),
+              FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => InteractionGoalScreen(result: result),
+                  ),
+                ),
+                icon: const Icon(Icons.arrow_forward_rounded),
+                label: const Text('Choose what to do next'),
+              ),
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(secondaryActionLabel),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
 
-          const SizedBox(height: 24),
+class _ResultHero extends StatelessWidget {
+  final Uint8List? imageBytes;
+  final CatState state;
+  final Color color;
+  final String sourceLabel;
+  final String resultLabel;
+  final String resultSummary;
+  final double confidence;
+  final String confidenceLabel;
 
-          const Text(
-            'Was this prediction correct?',
+  const _ResultHero({
+    required this.imageBytes,
+    required this.state,
+    required this.color,
+    required this.sourceLabel,
+    required this.resultLabel,
+    required this.resultSummary,
+    required this.confidence,
+    required this.confidenceLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = Container(
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [color.withValues(alpha: 0.13), CatTalkColors.cream],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(state.icon, color: color, size: 30),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            sourceLabel.toUpperCase(),
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+              color: color,
+              fontWeight: FontWeight.w900,
+              fontSize: 11,
+              letterSpacing: 1.1,
             ),
           ),
-
-          const SizedBox(height: 12),
-
-          FilledButton.icon(
-            onPressed: isSaving
-                ? null
-                : () async {
-                    await saveFeedback(correct: true);
-                  },
-            icon: const Icon(Icons.check),
-            label: Text(isSaving ? 'Saving...' : 'Yes, it is correct'),
+          const SizedBox(height: 6),
+          Text(resultLabel, style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 14),
+          Text(
+            resultSummary,
+            style: const TextStyle(
+              color: CatTalkColors.mutedInk,
+              fontSize: 16,
+              height: 1.5,
+            ),
           ),
-
-          const SizedBox(height: 12),
-
-          OutlinedButton.icon(
-            onPressed: isSaving
-                ? null
-                : () {
-                    setState(() {
-                      showCorrectionPicker = true;
-                    });
-                  },
-            icon: const Icon(Icons.edit),
-            label: const Text('No, correct the mood'),
-          ),
-
-          if (showCorrectionPicker) ...[
-            const SizedBox(height: 16),
-
-            DropdownButtonFormField<CatState>(
-              value: correctedState,
-              decoration: const InputDecoration(
-                labelText: 'Actual mood',
-                border: OutlineInputBorder(),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    value: confidence.clamp(0, 1),
+                    minHeight: 8,
+                    backgroundColor: color.withValues(alpha: 0.10),
+                    color: color,
+                  ),
+                ),
               ),
-              items: CatState.values
-                  .where((e) => e != CatState.unknown)
-                  .map(
-                    (state) => DropdownMenuItem(
-                      value: state,
-                      child: Text(stateName(state)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: isSaving
-                  ? null
-                  : (value) {
-                      setState(() {
-                        correctedState = value;
-                      });
-                    },
+              const SizedBox(width: 12),
+              Text(
+                '${(confidence * 100).round()}%',
+                style: TextStyle(color: color, fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            confidenceLabel,
+            style: const TextStyle(
+              color: CatTalkColors.mutedInk,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
-
-            const SizedBox(height: 12),
-
-            FilledButton.icon(
-              onPressed: correctedState == null || isSaving
-                  ? null
-                  : () async {
-                      await saveFeedback(correct: false);
-                    },
-              icon: const Icon(Icons.save),
-              label: Text(isSaving ? 'Saving...' : 'Save and Continue'),
-            ),
-          ],
+          ),
         ],
       ),
+    );
+
+    final image = imageBytes == null
+        ? null
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: Image.memory(
+              imageBytes!,
+              width: double.infinity,
+              height: 320,
+              fit: BoxFit.cover,
+            ),
+          );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (image == null || constraints.maxWidth < 700) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (image != null) ...[image, const SizedBox(height: 14)],
+              summary,
+            ],
+          );
+        }
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 5, child: image),
+              const SizedBox(width: 14),
+              Expanded(flex: 6, child: summary),
+            ],
+          ),
+        );
+      },
     );
   }
 }

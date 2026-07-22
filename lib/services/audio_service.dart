@@ -11,13 +11,15 @@ class AudioService {
 
   final AudioPlayer _player = AudioPlayer();
 
+  Stream<void> get onComplete => _player.onPlayerComplete;
+
+  Future<void> setVolume(double volume) => _player.setVolume(volume);
+
   Future<void> playSound(String soundName) async {
     final path = 'sounds/$soundName.mp3';
 
     await _player.stop();
-    await _player.play(
-      AssetSource(path),
-    );
+    await _player.play(AssetSource(path));
   }
 
   Future<void> stopSound() async {

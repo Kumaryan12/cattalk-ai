@@ -5,10 +5,6 @@ from pathlib import Path
 from duckduckgo_search import DDGS
 
 CLASSES = {
-    "relaxed": [
-        "relaxed cat lying down",
-        "calm relaxed cat resting",
-    ],
     "alert_cautious": [
         "alert cautious cat standing",
         "cat alert ears forward staring",

@@ -1,6 +1,5 @@
 import 'dart:js_interop';
 
-import '../models/cat_cues.dart';
 import '../models/cat_detection_result.dart';
 
 @JS('detectCatFromImageElement')
@@ -14,7 +13,9 @@ extension type CatDetectionJsResult(JSObject _) implements JSObject {
 }
 
 class WebCatDetectionService {
-  Future<CatDetectionResult> detectCatFromElementId(String imageElementId) async {
+  Future<CatDetectionResult> detectCatFromElementId(
+    String imageElementId,
+  ) async {
     final jsResult = await _detectCatFromImageElement(
       imageElementId.toJS,
     ).toDart;
@@ -25,11 +26,6 @@ class WebCatDetectionService {
         confidence: 0,
         message: 'No result returned from JS detector.',
         bbox: null,
-        suggestedMovement: MovementCue.unknown,
-        suggestedEars: EarCue.unknown,
-        suggestedTail: TailCue.unknown,
-        suggestedBody: BodyCue.unknown,
-        suggestedVocal: VocalCue.unknown,
       );
     }
 
@@ -39,9 +35,7 @@ class WebCatDetectionService {
 
     final rawBbox = result.bbox;
     if (rawBbox != null) {
-      parsedBbox = rawBbox.toDart
-          .map((value) => value.toDartDouble)
-          .toList();
+      parsedBbox = rawBbox.toDart.map((value) => value.toDartDouble).toList();
     }
 
     return CatDetectionResult(
@@ -49,11 +43,6 @@ class WebCatDetectionService {
       confidence: result.confidence,
       message: result.message,
       bbox: parsedBbox,
-      suggestedMovement: MovementCue.still,
-      suggestedEars: EarCue.neutral,
-      suggestedTail: TailCue.neutral,
-      suggestedBody: BodyCue.relaxed,
-      suggestedVocal: VocalCue.unknown,
     );
   }
 }
