@@ -140,22 +140,25 @@ class PredictionResultScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(19),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3E8),
+                  color: CatTalkColors.warmSoft,
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: CatTalkColors.warm.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Icon(
                       Icons.info_outline_rounded,
-                      color: Color(0xFFAA661F),
+                      color: CatTalkColors.warm,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         advisory,
                         style: const TextStyle(
-                          color: Color(0xFF704717),
+                          color: CatTalkColors.text,
                           height: 1.45,
                           fontWeight: FontWeight.w600,
                         ),
@@ -230,7 +233,7 @@ class _ResultHero extends StatelessWidget {
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.82),
+              color: CatTalkColors.panelRaised,
               borderRadius: BorderRadius.circular(18),
             ),
             child: Icon(state.icon, color: color, size: 30),

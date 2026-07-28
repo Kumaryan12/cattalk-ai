@@ -14,6 +14,7 @@ import '../models/cat_detection_result.dart';
 import '../services/backend_api_service.dart';
 import '../services/frame_quality_service.dart';
 import '../services/web_cat_detection_service.dart';
+import '../ui/cattalk_theme.dart';
 import 'automatic_cue_analysis_screen.dart';
 
 class RealtimeScanScreen extends StatefulWidget {
@@ -107,8 +108,16 @@ class _RealtimeScanScreenState extends State<RealtimeScanScreen> {
 
   Future<void> startCamera() async {
     try {
+      final usePortraitFrame = MediaQuery.sizeOf(context).width < 600;
       final stream = await html.window.navigator.mediaDevices?.getUserMedia({
-        'video': true,
+        'video': {
+          // Prefer the outward-facing camera on phones. `ideal` keeps the
+          // experience working on laptops and devices with only one camera.
+          'facingMode': {'ideal': 'environment'},
+          'width': {'ideal': usePortraitFrame ? 720 : 960},
+          'height': {'ideal': usePortraitFrame ? 1280 : 720},
+          'aspectRatio': {'ideal': usePortraitFrame ? 9 / 16 : 4 / 3},
+        },
         'audio': false,
       });
 
@@ -400,11 +409,11 @@ class _RealtimeScanScreenState extends State<RealtimeScanScreen> {
   }
 
   Color get statusColor {
-    if (freshBestFrame != null) return const Color(0xFF2D7D64);
+    if (freshBestFrame != null) return CatTalkColors.positive;
     if (errorMessage != null || readinessError != null) {
-      return const Color(0xFFB44949);
+      return CatTalkColors.danger;
     }
-    return const Color(0xFF7254D6);
+    return CatTalkColors.accent;
   }
 
   void stopCameraTracks() {
@@ -427,6 +436,7 @@ class _RealtimeScanScreenState extends State<RealtimeScanScreen> {
   Widget build(BuildContext context) {
     final savedFrame = freshBestFrame;
     final canContinue = savedFrame != null;
+    final usePortraitFrame = MediaQuery.sizeOf(context).width < 600;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Live observation')),
@@ -452,9 +462,9 @@ class _RealtimeScanScreenState extends State<RealtimeScanScreen> {
               ),
               const SizedBox(height: 20),
               AspectRatio(
-                aspectRatio: 16 / 9,
+                aspectRatio: usePortraitFrame ? 9 / 16 : 4 / 3,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(12),
                   child: ColoredBox(
                     color: Colors.black,
                     child: Stack(
@@ -525,14 +535,17 @@ class _RealtimeScanScreenState extends State<RealtimeScanScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFECEC),
+                    color: CatTalkColors.dangerSoft,
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: CatTalkColors.danger.withValues(alpha: 0.2),
+                    ),
                   ),
                   child: Row(
                     children: [
                       const Icon(
                         Icons.cloud_off_rounded,
-                        color: Color(0xFFB44949),
+                        color: CatTalkColors.danger,
                       ),
                       const SizedBox(width: 10),
                       Expanded(child: Text(readinessError!)),
@@ -550,15 +563,18 @@ class _RealtimeScanScreenState extends State<RealtimeScanScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFECEC),
+                    color: CatTalkColors.dangerSoft,
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: CatTalkColors.danger.withValues(alpha: 0.2),
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(
                         Icons.error_outline_rounded,
-                        color: Color(0xFFB44949),
+                        color: CatTalkColors.danger,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -576,8 +592,11 @@ class _RealtimeScanScreenState extends State<RealtimeScanScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEAF7F2),
+                    color: CatTalkColors.positiveSoft,
                     borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: CatTalkColors.positive.withValues(alpha: 0.18),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -602,14 +621,16 @@ class _RealtimeScanScreenState extends State<RealtimeScanScreen> {
                             const SizedBox(height: 3),
                             Text(
                               'Quality ${(savedFrame.quality * 100).round()}% · saved automatically',
-                              style: const TextStyle(color: Color(0xFF4E6F64)),
+                              style: const TextStyle(
+                                color: CatTalkColors.muted,
+                              ),
                             ),
                           ],
                         ),
                       ),
                       const Icon(
                         Icons.check_circle_rounded,
-                        color: Color(0xFF2D7D64),
+                        color: CatTalkColors.positive,
                       ),
                     ],
                   ),
@@ -662,7 +683,7 @@ class _RealtimeScanScreenState extends State<RealtimeScanScreen> {
               const Text(
                 'Visual estimates are automated and may be wrong. They are not veterinary advice. Give your cat space if they appear distressed.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF6E6675), height: 1.45),
+                style: TextStyle(color: CatTalkColors.muted, height: 1.45),
               ),
             ],
           ),
@@ -707,11 +728,11 @@ class LiveBoundingBoxPainter extends CustomPainter {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4
-      ..color = Colors.green;
+      ..color = CatTalkColors.accent;
 
     final labelPaint = Paint()
       ..style = PaintingStyle.fill
-      ..color = Colors.green;
+      ..color = CatTalkColors.accent;
 
     final sourceX = bbox[0];
     final sourceY = bbox[1];
