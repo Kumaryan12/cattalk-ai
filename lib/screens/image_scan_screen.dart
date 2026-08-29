@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/cat_analysis_result.dart';
 import '../services/backend_api_service.dart';
 import '../ui/cat_state_ui.dart';
+import '../ui/cattalk_theme.dart';
 import 'prediction_result_screen.dart';
 
 class ImageScanScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
   Future<void> _pick(ImageSource source) async {
     final image = await _picker.pickImage(
       source: source,
+      preferredCameraDevice: CameraDevice.rear,
       imageQuality: 86,
       maxWidth: 1800,
     );
@@ -90,7 +92,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
             children: [
               Text(
-                'Let’s read the visible signals.',
+                'Choose a clear moment.',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.8,
@@ -98,7 +100,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
               ),
               const SizedBox(height: 9),
               Text(
-                'Choose one clear, recent photo. Avoid filters and make sure most of the cat is visible.',
+                'Use a recent photo with the cat in good light. We’ll take it from there.',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.5,
@@ -145,7 +147,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
                   icon: Icons.cloud_off_outlined,
                   title: 'We couldn’t complete the scan',
                   body: _error!,
-                  color: const Color(0xFFB44949),
+                  color: CatTalkColors.danger,
                 ),
               ],
               if (analysis != null && !analysis.catDetected) ...[
@@ -155,7 +157,7 @@ class _ImageScanScreenState extends State<ImageScanScreen> {
                   title: 'No cat found in this photo',
                   body:
                       'Try a brighter image with the cat centered and their head and body visible.',
-                  color: Color(0xFF9A641F),
+                  color: CatTalkColors.warm,
                 ),
               ],
               if (analysis?.prediction != null) ...[
@@ -195,9 +197,9 @@ class _ImagePanel extends StatelessWidget {
       height: 380,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xFFEDE8F5),
+        color: CatTalkColors.surface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFDCD3E9)),
+        border: Border.all(color: CatTalkColors.border),
       ),
       child: imageBytes == null
           ? const _EmptyImage()
@@ -251,7 +253,7 @@ class _EmptyImage extends StatelessWidget {
           Icon(
             Icons.add_photo_alternate_outlined,
             size: 62,
-            color: Color(0xFF806F96),
+            color: CatTalkColors.accent,
           ),
           SizedBox(height: 14),
           Text(
@@ -259,7 +261,7 @@ class _EmptyImage extends StatelessWidget {
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF685A7A),
+              color: CatTalkColors.muted,
             ),
           ),
         ],
@@ -302,7 +304,7 @@ class _ReadyCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     'Detection confidence ${(analysis.detectionConfidence * 100).round()}%',
-                    style: const TextStyle(color: Color(0xFF6E6675)),
+                    style: const TextStyle(color: CatTalkColors.muted),
                   ),
                 ],
               ),
@@ -396,7 +398,7 @@ class _Tip extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(icon, size: 20, color: Color(0xFF7254D6)),
+      Icon(icon, size: 20, color: CatTalkColors.accent),
       SizedBox(width: 8),
       Text(text, style: TextStyle(fontWeight: FontWeight.w700)),
     ],

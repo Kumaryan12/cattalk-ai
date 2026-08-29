@@ -63,17 +63,17 @@ extension CatStateUi on CatState {
   Color color(BuildContext context) {
     switch (this) {
       case CatState.relaxed:
-        return const Color(0xFF2D7D64);
+        return const Color(0xFF75D9B0);
       case CatState.exploratorySocial:
-        return const Color(0xFF277A89);
+        return const Color(0xFF68D5E8);
       case CatState.alertCautious:
-        return const Color(0xFFB56A18);
+        return const Color(0xFFFFC56E);
       case CatState.playfulActive:
-        return const Color(0xFF5B5BD6);
+        return const Color(0xFFA8A6FF);
       case CatState.defensiveStressed:
-        return const Color(0xFFB44949);
+        return const Color(0xFFFF8585);
       case CatState.attentionSeeking:
-        return const Color(0xFF9A4E87);
+        return const Color(0xFFFF9ED7);
       case CatState.unknown:
         return Theme.of(context).colorScheme.outline;
     }

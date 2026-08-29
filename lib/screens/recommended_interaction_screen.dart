@@ -29,6 +29,7 @@ class _RecommendedInteractionScreenState
   final _audio = AudioService();
   StreamSubscription<void>? _completionSubscription;
   bool _playing = false;
+  String? _soundError;
   double _volume = 0.35;
 
   @override
@@ -37,32 +38,12 @@ class _RecommendedInteractionScreenState
     _completionSubscription = _audio.onComplete.listen((_) {
       if (mounted) setState(() => _playing = false);
     });
+    unawaited(_prepareSound());
   }
 
   CatSound _sound() {
     final sounds = SoundLibraryService().getAllSounds();
-    final state = widget.result.state;
-    if (state == CatState.defensiveStressed ||
-        state == CatState.alertCautious) {
-      return sounds.firstWhere(
-        (sound) =>
-            sound.id ==
-            (widget.goal == UserGoal.calmCat
-                ? 'calm_purr_01'
-                : 'soft_trill_01'),
-      );
-    }
-    switch (widget.goal) {
-      case UserGoal.playWithCat:
-        return sounds.firstWhere((sound) => sound.id == 'play_chirp_01');
-      case UserGoal.callCat:
-      case UserGoal.getAttention:
-        return sounds.firstWhere((sound) => sound.id == 'short_meow_01');
-      case UserGoal.calmCat:
-        return sounds.firstWhere((sound) => sound.id == 'calm_purr_01');
-      case UserGoal.buildTrust:
-        return sounds.firstWhere((sound) => sound.id == 'soft_trill_01');
-    }
+    return sounds.firstWhere((sound) => sound.id == widget.goal.soundId);
   }
 
   List<String> _steps() {
@@ -100,14 +81,51 @@ class _RecommendedInteractionScreenState
     ];
   }
 
-  Future<void> _toggleSound(CatSound sound) async {
+  Future<void> _prepareSound() async {
+    if (mounted) {
+      setState(() => _soundError = null);
+    }
+
+    try {
+      await _audio.prepareSound(_sound().assetName, volume: _volume);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _playing = false;
+          _soundError =
+              'The sound could not be prepared. Check your connection and try again.';
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleSound() async {
     if (_playing) {
       await _audio.stopSound();
-    } else {
-      await _audio.setVolume(_volume);
-      await _audio.playSound(sound.assetName);
+      if (mounted) setState(() => _playing = false);
+      return;
     }
-    if (mounted) setState(() => _playing = !_playing);
+
+    // Start playback immediately, while the mobile browser still considers
+    // this call part of the user's tap. Do not await any setup before it.
+    final playback = _audio.resumeSound();
+    if (mounted) {
+      setState(() {
+        _playing = true;
+        _soundError = null;
+      });
+    }
+    try {
+      await playback;
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _playing = false;
+          _soundError =
+              'Your browser blocked the sound. Tap “Try loading sound again”, then play it once.';
+        });
+      }
+    }
   }
 
   @override
@@ -136,7 +154,7 @@ class _RecommendedInteractionScreenState
                   gradient: LinearGradient(
                     colors: [
                       color.withValues(alpha: 0.16),
-                      const Color(0xFFFFF5EC),
+                      CatTalkColors.panel,
                     ],
                   ),
                   borderRadius: BorderRadius.circular(28),
@@ -165,7 +183,7 @@ class _RecommendedInteractionScreenState
                       style: const TextStyle(
                         fontSize: 16,
                         height: 1.45,
-                        color: Color(0xFF5F5866),
+                        color: CatTalkColors.muted,
                       ),
                     ),
                   ],
@@ -262,7 +280,7 @@ class _RecommendedInteractionScreenState
                                 Text(
                                   '${sound.energy} energy · ${sound.bestFor}',
                                   style: const TextStyle(
-                                    color: Color(0xFF6E6675),
+                                    color: CatTalkColors.muted,
                                   ),
                                 ),
                               ],
@@ -286,7 +304,10 @@ class _RecommendedInteractionScreenState
                               label: '${(_volume * 100).round()}%',
                               onChanged: _playing
                                   ? null
-                                  : (value) => setState(() => _volume = value),
+                                  : (value) {
+                                      setState(() => _volume = value);
+                                      unawaited(_audio.setVolume(value));
+                                    },
                             ),
                           ),
                           SizedBox(
@@ -306,7 +327,7 @@ class _RecommendedInteractionScreenState
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed: () => _toggleSound(sound),
+                          onPressed: _toggleSound,
                           icon: Icon(
                             _playing
                                 ? Icons.stop_rounded
@@ -317,6 +338,25 @@ class _RecommendedInteractionScreenState
                           ),
                         ),
                       ),
+                      if (_soundError != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _soundError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            height: 1.4,
+                            color: CatTalkColors.mutedInk,
+                          ),
+                        ),
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _prepareSound,
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Try loading sound again'),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 220),

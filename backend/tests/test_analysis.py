@@ -1,10 +1,39 @@
 import unittest
+from unittest.mock import patch
 
-from routes.analysis import STATE_PROMPTS, prediction_from_results
+import numpy as np
+
+from routes.analysis import (
+    CAT_CLASS_ID,
+    DETECTOR_CONFIDENCE,
+    DETECTOR_IMAGE_SIZE,
+    STATE_PROMPTS,
+    _best_cat_detection,
+    prediction_from_results,
+)
 from main import health
 
 
 class PredictionMappingTests(unittest.TestCase):
+    def test_detector_keeps_low_confidence_cat_candidates(self):
+        class EmptyDetector:
+            def __init__(self):
+                self.options = None
+
+            def predict(self, _image, **options):
+                self.options = options
+                return []
+
+        detector = EmptyDetector()
+        with patch("routes.analysis.get_detector", return_value=detector):
+            result = _best_cat_detection(np.zeros((32, 32, 3), dtype=np.uint8))
+
+        self.assertIsNone(result)
+        self.assertEqual(detector.options["classes"], [CAT_CLASS_ID])
+        self.assertEqual(detector.options["conf"], DETECTOR_CONFIDENCE)
+        self.assertEqual(detector.options["imgsz"], DETECTOR_IMAGE_SIZE)
+        self.assertLessEqual(DETECTOR_CONFIDENCE, 0.10)
+
     def test_health_reports_model_readiness(self):
         response = health()
 

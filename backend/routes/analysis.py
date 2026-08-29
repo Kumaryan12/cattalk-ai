@@ -15,6 +15,8 @@ router = APIRouter(prefix="/api")
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 CAT_CLASS_ID = 15
+DETECTOR_CONFIDENCE = float(os.getenv("CATTALK_DETECTOR_CONFIDENCE", "0.10"))
+DETECTOR_IMAGE_SIZE = int(os.getenv("CATTALK_DETECTOR_IMAGE_SIZE", "768"))
 
 STATE_PROMPTS = {
     "relaxed": "a relaxed calm cat with a comfortable body posture",
@@ -77,7 +79,16 @@ class CachedClipClassifier:
 
 
 def _best_cat_detection(image_np: np.ndarray) -> Optional[Dict[str, Any]]:
-    results = get_detector()(image_np, verbose=False)
+    # COCO's default 0.25 threshold commonly drops dark-fur cats against dark
+    # backgrounds. Restricting inference to the cat class lets us retain those
+    # weaker boxes without returning another object class as a cat.
+    results = get_detector().predict(
+        image_np,
+        verbose=False,
+        classes=[CAT_CLASS_ID],
+        conf=DETECTOR_CONFIDENCE,
+        imgsz=DETECTOR_IMAGE_SIZE,
+    )
     best: Optional[Dict[str, Any]] = None
 
     for result in results:

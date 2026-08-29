@@ -107,7 +107,8 @@ class _AutomaticCueAnalysisScreenState
                             vertical: 7,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.92),
+                            color: CatTalkColors.panel.withValues(alpha: 0.94),
+                            border: Border.all(color: CatTalkColors.border),
                             borderRadius: BorderRadius.circular(99),
                           ),
                           child: const Row(
@@ -169,7 +170,7 @@ class _AutomaticCueAnalysisScreenState
                             const Icon(
                               Icons.cloud_off_outlined,
                               size: 42,
-                              color: Color(0xFFB44949),
+                              color: CatTalkColors.danger,
                             ),
                             const SizedBox(height: 16),
                             Text(

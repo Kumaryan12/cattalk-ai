@@ -23,7 +23,9 @@ class BackendApiService {
     try {
       final response = await http
           .get(Uri.parse('$baseUrl/health'))
-          .timeout(const Duration(seconds: 15));
+          // A scale-to-zero deployment may need to start the model container
+          // before it can answer its first health check.
+          .timeout(const Duration(seconds: 45));
       if (response.statusCode != 200) return false;
 
       final payload = jsonDecode(response.body) as Map<String, dynamic>;

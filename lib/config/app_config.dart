@@ -8,11 +8,4 @@ class AppConfig {
     'RECIPIENT_NAME',
     defaultValue: 'Mrunali',
   );
-
-  static const String giftOccasion = String.fromEnvironment(
-    'GIFT_OCCASION',
-    defaultValue: 'Happy Birthday',
-  );
-
-  static bool get isPersonalized => recipientName.trim().isNotEmpty;
 }

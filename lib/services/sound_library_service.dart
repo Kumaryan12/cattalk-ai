@@ -25,7 +25,7 @@ class SoundLibraryService {
         displayName: 'Food Call',
         type: SoundType.call,
         energy: 'medium',
-        bestFor: 'Food soon',
+        bestFor: 'Invite cat closer',
       ),
       CatSound(
         id: 'play_chirp_01',

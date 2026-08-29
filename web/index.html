@@ -82,10 +82,19 @@
         };
       }
 
-      const predictions = await catDetectorModel.detect(img);
+      // COCO-SSD defaults to a 0.5 score cutoff, which frequently hides
+      // low-contrast cats (especially black fur in dim rooms). We still only
+      // accept the model's explicit cat class.
+      const predictions = await catDetectorModel.detect(img, 20, 0.18);
 
-      const catPrediction = predictions.find(
+      const catPredictions = predictions.filter(
         (prediction) => prediction.class === "cat"
+      );
+      const catPrediction = catPredictions.reduce(
+        (best, prediction) => !best || prediction.score > best.score
+          ? prediction
+          : best,
+        null
       );
 
       if (!catPrediction) {

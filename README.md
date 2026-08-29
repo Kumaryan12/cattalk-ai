@@ -41,14 +41,13 @@ flutter pub get
 flutter run -d chrome --dart-define=BACKEND_BASE_URL=http://127.0.0.1:8000
 ```
 
-The included build is personalized for Mrunali's birthday. You can override
-the recipient or occasion without editing code:
+The interface greets Mrunali by default. You can override the name without
+editing code:
 
 ```bash
 flutter run -d chrome \
   --dart-define=BACKEND_BASE_URL=http://127.0.0.1:8000 \
-  --dart-define=RECIPIENT_NAME="Your friend's name" \
-  --dart-define=GIFT_OCCASION="Happy Birthday"
+  --dart-define=RECIPIENT_NAME="Your name"
 ```
 
 For a deployed frontend, set `BACKEND_BASE_URL` to the deployed API origin at
@@ -57,11 +56,19 @@ build time.
 ## Production
 
 - Web app: https://cattalk-for-mrunali.vercel.app
-- API: https://cattalk-ai-api-production-bd7f.up.railway.app
+- API: deployed separately as a Cloud Run service; see
+  [`backend/DEPLOY_CLOUD_RUN.md`](backend/DEPLOY_CLOUD_RUN.md)
 
-The production Flutter bundle is built with the Railway API URL through
+The production Flutter bundle is built with the API URL through
 `BACKEND_BASE_URL`. The backend uses a CPU-only TinyCLIP model with cached text
-embeddings to keep warm classifications fast.
+embeddings to keep warm classifications fast. The container also packages the
+TinyCLIP and YOLOv8n weights so new instances do not download models while
+starting.
+
+## Photo credit
+
+The home portrait is by Osman Arabacı and is used under the Pexels license:
+https://www.pexels.com/photo/portrait-of-a-cat-in-the-dark-19511345/
 
 ## Checks
 
