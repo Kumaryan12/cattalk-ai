@@ -8,6 +8,21 @@ import 'recommended_interaction_screen.dart';
 enum UserGoal { calmCat, callCat, playWithCat, buildTrust, getAttention }
 
 extension UserGoalUi on UserGoal {
+  String get soundId {
+    switch (this) {
+      case UserGoal.calmCat:
+        return 'calm_purr_01';
+      case UserGoal.callCat:
+        return 'food_call_01';
+      case UserGoal.playWithCat:
+        return 'play_chirp_01';
+      case UserGoal.buildTrust:
+        return 'soft_trill_01';
+      case UserGoal.getAttention:
+        return 'short_meow_01';
+    }
+  }
+
   String get label {
     switch (this) {
       case UserGoal.calmCat:

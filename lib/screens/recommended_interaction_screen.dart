@@ -43,28 +43,7 @@ class _RecommendedInteractionScreenState
 
   CatSound _sound() {
     final sounds = SoundLibraryService().getAllSounds();
-    final state = widget.result.state;
-    if (state == CatState.defensiveStressed ||
-        state == CatState.alertCautious) {
-      return sounds.firstWhere(
-        (sound) =>
-            sound.id ==
-            (widget.goal == UserGoal.calmCat
-                ? 'calm_purr_01'
-                : 'soft_trill_01'),
-      );
-    }
-    switch (widget.goal) {
-      case UserGoal.playWithCat:
-        return sounds.firstWhere((sound) => sound.id == 'play_chirp_01');
-      case UserGoal.callCat:
-      case UserGoal.getAttention:
-        return sounds.firstWhere((sound) => sound.id == 'short_meow_01');
-      case UserGoal.calmCat:
-        return sounds.firstWhere((sound) => sound.id == 'calm_purr_01');
-      case UserGoal.buildTrust:
-        return sounds.firstWhere((sound) => sound.id == 'soft_trill_01');
-    }
+    return sounds.firstWhere((sound) => sound.id == widget.goal.soundId);
   }
 
   List<String> _steps() {

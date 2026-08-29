@@ -56,11 +56,14 @@ build time.
 ## Production
 
 - Web app: https://cattalk-for-mrunali.vercel.app
-- API: https://cattalk-ai-api-production-bd7f.up.railway.app
+- API: deployed separately as a Cloud Run service; see
+  [`backend/DEPLOY_CLOUD_RUN.md`](backend/DEPLOY_CLOUD_RUN.md)
 
-The production Flutter bundle is built with the Railway API URL through
+The production Flutter bundle is built with the API URL through
 `BACKEND_BASE_URL`. The backend uses a CPU-only TinyCLIP model with cached text
-embeddings to keep warm classifications fast.
+embeddings to keep warm classifications fast. The container also packages the
+TinyCLIP and YOLOv8n weights so new instances do not download models while
+starting.
 
 ## Photo credit
 

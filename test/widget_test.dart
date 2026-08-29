@@ -1,11 +1,23 @@
 import 'package:cattalk_ai/main.dart';
 import 'package:cattalk_ai/models/cat_state.dart';
+import 'package:cattalk_ai/screens/interaction_goal_screen.dart';
 import 'package:cattalk_ai/screens/prediction_result_screen.dart';
 import 'package:cattalk_ai/services/frame_quality_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('every interaction goal maps to a unique sound', () {
+    final soundIds = UserGoal.values.map((goal) => goal.soundId).toSet();
+
+    expect(soundIds, hasLength(UserGoal.values.length));
+    expect(UserGoal.calmCat.soundId, 'calm_purr_01');
+    expect(UserGoal.callCat.soundId, 'food_call_01');
+    expect(UserGoal.playWithCat.soundId, 'play_chirp_01');
+    expect(UserGoal.buildTrust.soundId, 'soft_trill_01');
+    expect(UserGoal.getAttention.soundId, 'short_meow_01');
+  });
+
   test('frame quality favors a clear, well-lit, close cat image', () {
     final strongFrame = FrameQualityService.calculate(
       detectionConfidence: 0.91,

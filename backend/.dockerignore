@@ -5,4 +5,5 @@ dataset
 scripts
 tests
 uploads
+yolov8n.pt
 .DS_Store
